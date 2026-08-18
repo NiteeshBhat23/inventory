@@ -1,5 +1,5 @@
 import { ArrowClockwise, Eye, EyeSlash, Storefront, WarningCircle } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { api, ApiError } from '../lib/apiClient'
 import { useAuth } from '../lib/AuthContext'
@@ -38,7 +38,7 @@ function Brand() {
 }
 
 export default function Login() {
-  const { session, shop, shopLoadError, refreshShop, signOut } = useAuth()
+  const { session, shop, shopLoadError, refreshShop, signOut, authError, clearAuthError } = useAuth()
   const toast = useToast()
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
@@ -49,6 +49,16 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+
+  // A reset/magic link that bounced back with an error (expired, already
+  // used, etc.) — land the user straight in the forgot-password screen with
+  // an explanation instead of a bare, unexplained sign-in form.
+  useEffect(() => {
+    if (!authError) return
+    setMode('forgot')
+    setError(authError)
+    clearAuthError()
+  }, [authError, clearAuthError])
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault()

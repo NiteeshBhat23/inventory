@@ -30,6 +30,12 @@ interface AuthState {
   // uses this flag to show the "set a new password" screen instead.
   passwordRecovery: boolean
   clearPasswordRecovery: () => void
+  // A human-readable message when Supabase redirected back with `#error=...`
+  // instead of a session — e.g. a reset/magic link that was already used or
+  // expired. Surfaced once, then cleared; the URL fragment is stripped on
+  // read so a refresh doesn't re-show it.
+  authError: string | null
+  clearAuthError: () => void
   refreshShop: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -43,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [shopResolved, setShopResolved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   // The user id we last loaded a shop for. supabase-js re-emits SIGNED_IN for
   // an unchanged user on a timer (and on tab focus / token refresh); keying off
@@ -99,6 +106,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await refreshShop()
     }
 
+    // Supabase redirects failed auth links (expired/already-used reset or
+    // magic links, denied OAuth, etc.) back with `#error=...` rather than a
+    // session — supabase-js never emits an event for that case, so without
+    // this it fails silently and the user just lands back on a blank Login
+    // screen with no idea why.
+    const hashParams = new URLSearchParams(window.location.hash.slice(1))
+    if (hashParams.get('error')) {
+      const description = hashParams.get('error_description')
+      setAuthError(description ? description.replace(/\+/g, ' ') : 'That link is no longer valid.')
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+
     supabase.auth.getSession().then(async ({ data }) => {
       // Mirror the token before any request goes out, so the very first call
       // takes the synchronous path instead of re-awaiting getSession().
@@ -153,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         shopLoadError,
         passwordRecovery,
         clearPasswordRecovery: () => setPasswordRecovery(false),
+        authError,
+        clearAuthError: () => setAuthError(null),
         refreshShop,
         signOut,
       }}
