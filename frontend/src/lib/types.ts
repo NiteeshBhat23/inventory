@@ -149,3 +149,92 @@ export interface DashboardData {
   below_cost_items: Item[]
   recent_activity: ActivityEntry[]
 }
+
+// ---------- Insights (decision-support reports) ----------
+
+export interface ProfitLeaderboardRow {
+  item_id: string
+  item_name: string
+  units_sold: number
+  revenue: number
+  total_profit: number
+  profit_per_unit: number
+  margin_pct: number
+}
+
+export interface VelocityRow {
+  item_id: string
+  item_name: string
+  units_sold: number
+  units_per_day: number
+}
+
+export interface AgingRow {
+  item_id: string
+  item_name: string
+  stock_qty: number
+  days_since_last_sale: number | null
+  bucket: string
+  units_sold_in_period: number
+  sell_through_pct: number | null
+}
+
+export interface SupplierPriceRow {
+  item_id: string
+  item_name: string
+  current_avg_cost: number
+  best_price: number
+  best_supplier: string | null
+  best_price_date: string
+  supplier_count: number
+  overpaying: boolean
+}
+
+export interface LowMarginRow {
+  item_id: string
+  item_name: string
+  avg_cost: number
+  selling_price: number
+  margin_pct: number | null
+  target_margin_pct: number
+  is_below_cost: boolean
+}
+
+export interface TimingRow {
+  item_id: string
+  item_name: string
+  avg_days_to_sell: number
+  sample_size: number
+}
+
+export interface ReorderRow {
+  item_id: string
+  item_name: string
+  stock_qty: number
+  units_per_day: number
+  days_of_stock_left: number | null
+  suggested_reorder_qty: number
+}
+
+export interface InsightsData {
+  days: number
+  profit_leaderboard: ProfitLeaderboardRow[]
+  velocity: VelocityRow[]
+  aging: AgingRow[]
+  supplier_comparison: SupplierPriceRow[]
+  low_margin: LowMarginRow[]
+  timing: TimingRow[]
+  reorder: ReorderRow[]
+}
+
+export interface PriceHistoryPoint {
+  date: string
+  kind: 'cost' | 'selling'
+  value: number
+}
+
+export interface PriceHistoryData {
+  item_id: string
+  item_name: string
+  points: PriceHistoryPoint[]
+}

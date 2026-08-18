@@ -101,7 +101,7 @@ export default function AddPurchase() {
         purchase_date: date,
         lines: payloadLines,
       })
-      invalidate('/dashboard', '/items', '/sales', '/purchases')
+      invalidate('/dashboard', '/insights', '/items', '/sales', '/purchases')
       setResult(res)
       toast.success(
         `Purchase saved — ${res.items_updated + res.new_items_added} item(s) updated`,

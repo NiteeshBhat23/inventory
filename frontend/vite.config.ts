@@ -82,6 +82,9 @@ export default defineConfig(({ mode }) => ({
           if (!path.includes('/node_modules/')) return
           if (path.includes('/@phosphor-icons/')) return 'icons'
           if (path.includes('/@supabase/')) return 'supabase'
+          // Only imported by the lazy-loaded Insights page, so this chunk is
+          // fetched on first visit to /reports rather than on initial load.
+          if (path.includes('/recharts/') || path.includes('/d3-') || path.includes('/victory-vendor/')) return 'charts'
           if (
             /\/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(path)
           ) {

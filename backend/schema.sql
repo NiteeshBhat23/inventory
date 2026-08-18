@@ -72,6 +72,18 @@ create index if not exists idx_purchase_shop_created on purchase_history (shop_i
 create index if not exists idx_purchase_item_date on purchase_history (item_id, purchase_date desc);
 create index if not exists idx_items_shop_active_name on items (shop_id, canonical_name) where is_archived = false;
 
+create table if not exists selling_price_history (
+  id uuid primary key default uuid_generate_v4(),
+  item_id uuid not null references items(item_id) on delete cascade,
+  shop_id uuid not null references shops(id) on delete cascade,
+  old_price numeric,
+  new_price numeric not null,
+  source text not null default 'manual' check (source in ('manual', 'auto_on_purchase')),
+  changed_at timestamptz not null default now()
+);
+create index if not exists idx_price_history_item_date on selling_price_history (item_id, changed_at desc);
+create index if not exists idx_price_history_shop on selling_price_history (shop_id);
+
 -- Row-Level Security: every table scoped by shop_id === the authenticated user.
 alter table shops enable row level security;
 alter table items enable row level security;
@@ -88,6 +100,9 @@ create policy "shop owner reads/writes own purchases" on purchase_history
   for all using (shop_id = auth.uid()) with check (shop_id = auth.uid());
 
 create policy "shop owner reads/writes own sales" on sale_records
+  for all using (shop_id = auth.uid()) with check (shop_id = auth.uid());
+
+create policy "shop owner reads/writes own price history" on selling_price_history
   for all using (shop_id = auth.uid()) with check (shop_id = auth.uid());
 
 -- Note: the FastAPI backend connects with the Postgres service-role connection

@@ -44,8 +44,12 @@ def commit_purchase_batch(db: Session, shop: ShopContext, batch: PurchaseBatchIn
             item.avg_cost = cost_result.new_avg_cost
             item.stock_qty = cost_result.new_stock_qty
             if not item.selling_price:
+                old_selling_price = item.selling_price
                 margin = item.target_margin_pct if item.target_margin_pct is not None else shop.default_target_margin_pct
                 item.selling_price = cost_result.new_avg_cost * (Decimal(1) + Decimal(margin) / Decimal(100))
+                items_service.log_price_change(
+                    db, shop, item, old_selling_price, item.selling_price, source="auto_on_purchase"
+                )
 
             history = models.PurchaseHistory(
                 item_id=item.item_id,

@@ -1,4 +1,4 @@
-import { ArrowClockwise, Eye, EyeSlash, Storefront, Tag, WarningCircle } from '@phosphor-icons/react'
+import { ArrowClockwise, Eye, EyeSlash, Storefront, WarningCircle } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { api, ApiError } from '../lib/apiClient'
@@ -6,6 +6,7 @@ import { useAuth } from '../lib/AuthContext'
 import { Button } from '../components/ui/Button'
 import { TextField } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
+import Logo from '../components/Logo'
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -18,9 +19,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <div className="mb-6 text-center">
-      <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-brand-ink">
-        <Tag size={26} weight="fill" aria-hidden="true" />
-      </span>
+      <Logo size={52} className="mx-auto mb-3 block" />
       <h1 className="font-display text-2xl font-semibold text-ink">ProfitPulse</h1>
       <p className="mt-1 text-sm text-ink-muted">
         Know what every part really costs you — and what to charge.

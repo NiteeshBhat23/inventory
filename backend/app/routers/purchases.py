@@ -7,6 +7,7 @@ from ..deps import ShopContext, get_current_shop
 from ..schemas import PurchaseBatchIn, PurchaseBatchResult, PurchaseHistoryEntry
 from ..services import purchases as purchases_service
 from ..services.analytics import invalidate_dashboard_cache
+from ..services.insights import invalidate_insights_cache
 from ..services.cost_engine import InvalidPurchaseError
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
@@ -23,6 +24,7 @@ def commit_purchase(
     except InvalidPurchaseError as e:
         raise HTTPException(status_code=422, detail=str(e))
     invalidate_dashboard_cache(shop.id)
+    invalidate_insights_cache(shop.id)
     return result
 
 

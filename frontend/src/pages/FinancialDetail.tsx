@@ -1,4 +1,4 @@
-import { ChartLine, Tag } from '@phosphor-icons/react'
+import { ChartLine, HandCoins } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '../lib/useQuery'
@@ -9,6 +9,7 @@ import { Card, CardHeader, CardList, CardListRow } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { SelectField } from '../components/ui/Field'
+import { PERIODS } from '../lib/periods'
 import { cn } from '../lib/cn'
 
 type Metric = 'profit' | 'revenue'
@@ -70,9 +71,11 @@ export default function FinancialDetail() {
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
         >
-          <option value={7}>Last 7 days</option>
-          <option value={30}>Last 30 days</option>
-          <option value={90}>Last 90 days</option>
+          {PERIODS.map((p) => (
+            <option key={p.days} value={p.days}>
+              {p.label}
+            </option>
+          ))}
         </SelectField>
       </Card>
 
@@ -152,7 +155,7 @@ export default function FinancialDetail() {
                           aria-hidden="true"
                           className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-good-soft text-good-soft-ink"
                         >
-                          <Tag size={15} weight="duotone" />
+                          <HandCoins size={15} weight="duotone" />
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-medium text-ink">

@@ -2,10 +2,10 @@ import {
   ArrowUp,
   CaretRight,
   CurrencyInr,
+  HandCoins,
   Package,
   Receipt,
   Sparkle,
-  Tag,
   TrendUp,
   Warning,
 } from '@phosphor-icons/react'
@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '../lib/useQuery'
 import { money, qty, relativeDate } from '../lib/format'
+import { PERIODS } from '../lib/periods'
 import type { DashboardData } from '../lib/types'
 import KpiTile from '../components/KpiTile'
 import AlertBanner from '../components/AlertBanner'
@@ -21,13 +22,8 @@ import { RankedList } from '../components/ui/RankedList'
 import { EmptyState } from '../components/ui/EmptyState'
 import { DashboardSkeleton } from '../components/ui/Skeleton'
 import { ButtonLink } from '../components/ui/Button'
+import { controlBase, controlTone } from '../components/ui/Field'
 import { cn } from '../lib/cn'
-
-const RANGES = [
-  { label: '7 days', short: '7d', days: 7 },
-  { label: '30 days', short: '30d', days: 30 },
-  { label: '90 days', short: '90d', days: 90 },
-]
 
 export default function Dashboard() {
   const [days, setDays] = useState(30)
@@ -40,29 +36,30 @@ export default function Dashboard() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold text-ink">Dashboard</h1>
 
-        {/* Segmented control: one visible group, one pressed state, all three
-            options always reachable — clearer than a dropdown for 3 choices. */}
-        <div
-          role="group"
-          aria-label="Date range"
-          className="flex rounded-xl border border-line bg-surface p-0.5"
-        >
-          {RANGES.map((r) => (
-            <button
-              key={r.days}
-              type="button"
-              onClick={() => setDays(r.days)}
-              aria-pressed={days === r.days}
-              aria-label={`Last ${r.label}`}
-              className={cn(
-                'min-h-11 min-w-11 rounded-lg px-3 text-xs font-semibold transition-colors duration-150',
-                days === r.days ? 'bg-brand text-brand-ink' : 'text-ink-muted hover:text-ink',
-              )}
-            >
-              {r.short}
-            </button>
-          ))}
-        </div>
+        {/* A dropdown rather than the old 3-button segmented control: once
+            "beyond 90 days" needed supporting, a fixed row of buttons stopped
+            scaling. Same option list as every other Period picker in the app. */}
+        <label className="relative">
+          <span className="sr-only">Date range</span>
+          <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className={cn(controlBase, controlTone(), 'min-h-11 w-auto appearance-none py-0 pr-8 text-sm font-semibold')}
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2364748b' stroke-width='1.75'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E\")",
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.6rem center',
+              backgroundSize: '0.875rem',
+            }}
+          >
+            {PERIODS.map((p) => (
+              <option key={p.days} value={p.days}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {loading && !data && <DashboardSkeleton />}
@@ -170,7 +167,7 @@ export default function Dashboard() {
                       to="/reports"
                       className="flex items-center gap-0.5 text-xs font-semibold text-brand-text"
                     >
-                      Reports
+                      Insights
                       <CaretRight size={13} weight="bold" aria-hidden="true" />
                     </Link>
                   }
@@ -191,7 +188,7 @@ export default function Dashboard() {
                             )}
                           >
                             {isSale ? (
-                              <Tag size={15} weight="duotone" />
+                              <HandCoins size={15} weight="duotone" />
                             ) : (
                               <ArrowUp size={15} weight="bold" />
                             )}

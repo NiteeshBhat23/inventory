@@ -88,7 +88,7 @@ export default function ItemDetail() {
     setSaving(true)
     try {
       const updated = await api.patch<Item>(`/items/${item.item_id}`, body)
-      invalidate('/dashboard', '/items', '/sales', '/purchases')
+      invalidate('/dashboard', '/insights', '/items', '/sales', '/purchases')
       setItem(updated)
       toast.success(successMsg)
       return updated
@@ -134,7 +134,7 @@ export default function ItemDetail() {
     if (!ok) return
     try {
       await api.delete(`/items/${item.item_id}`)
-      invalidate('/dashboard', '/items', '/sales', '/purchases')
+      invalidate('/dashboard', '/insights', '/items', '/sales', '/purchases')
       toast.success(`${item.canonical_name} archived`)
       navigate('/inventory')
     } catch {

@@ -232,3 +232,99 @@ class DashboardOut(BaseModel):
     low_stock_items: list[ItemOut]
     below_cost_items: list[ItemOut]
     recent_activity: list[ActivityEntry]
+
+
+# ---------- Insights (replaces the old CSV reports) ----------
+class ProfitLeaderboardRow(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    units_sold: float
+    revenue: float
+    total_profit: float
+    profit_per_unit: float
+    margin_pct: float
+
+
+class VelocityRow(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    units_sold: float
+    units_per_day: float
+
+
+class AgingRow(BaseModel):
+    """One row per item currently in stock, oldest-unsold first.
+
+    bucket groups by days since the item's last sale using the standard
+    retail convention (0-30 / 31-60 / 61-90 / 90+ / never sold). sell_through_pct
+    keeps a slow-but-steady seller from reading the same as one that's truly
+    dead: it's units sold in the period over (units sold + what's still on
+    the shelf), so a high number here softens an old last-sale date."""
+
+    item_id: uuid.UUID
+    item_name: str
+    stock_qty: float
+    days_since_last_sale: int | None
+    bucket: str
+    units_sold_in_period: float
+    sell_through_pct: float | None
+
+
+class SupplierPriceRow(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    current_avg_cost: float
+    best_price: float
+    best_supplier: str | None
+    best_price_date: date
+    supplier_count: int
+    overpaying: bool  # current avg cost is above the best price ever recorded
+
+
+class LowMarginRow(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    avg_cost: float
+    selling_price: float
+    margin_pct: float | None
+    target_margin_pct: float
+    is_below_cost: bool
+
+
+class TimingRow(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    avg_days_to_sell: float
+    sample_size: int
+
+
+class ReorderRow(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    stock_qty: float
+    units_per_day: float
+    days_of_stock_left: float | None
+    suggested_reorder_qty: float
+
+
+class PriceHistoryPoint(BaseModel):
+    date: date
+    kind: str  # 'cost' | 'selling'
+    value: float
+
+
+class PriceHistoryOut(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    points: list[PriceHistoryPoint]
+
+
+class InsightsOut(BaseModel):
+    days: int
+    profit_leaderboard: list[ProfitLeaderboardRow]
+    velocity: list[VelocityRow]
+    aging: list[AgingRow]
+    supplier_comparison: list[SupplierPriceRow]
+    low_margin: list[LowMarginRow]
+    timing: list[TimingRow]
+    reorder: list[ReorderRow]

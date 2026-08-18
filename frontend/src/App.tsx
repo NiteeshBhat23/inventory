@@ -7,6 +7,7 @@ import { ConfirmProvider } from './components/ui/ConfirmDialog'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Logo from './components/Logo'
 
 // Dashboard and Login stay in the entry bundle — one of the two is always the
 // first thing rendered, so deferring them would only add a round trip to the
@@ -16,7 +17,7 @@ const Inventory = lazy(() => import('./pages/Inventory'))
 const ItemDetail = lazy(() => import('./pages/ItemDetail'))
 const AddPurchase = lazy(() => import('./pages/AddPurchase'))
 const RecordSale = lazy(() => import('./pages/RecordSale'))
-const Reports = lazy(() => import('./pages/Reports'))
+const Insights = lazy(() => import('./pages/Insights'))
 const Settings = lazy(() => import('./pages/Settings'))
 const FinancialDetail = lazy(() => import('./pages/FinancialDetail'))
 const PurchaseHistory = lazy(() => import('./pages/PurchaseHistory'))
@@ -24,8 +25,10 @@ const PurchaseHistory = lazy(() => import('./pages/PurchaseHistory'))
 function BootScreen() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas">
+      {/* Pulse rather than spin: the mark is asymmetric, so a rotation reads
+          as "broken" where a symmetric ring reads as "loading". */}
       <div className="flex flex-col items-center gap-3" role="status" aria-busy="true">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+        <Logo size={40} className="animate-pulse" />
         <span className="text-sm text-ink-muted">Loading…</span>
       </div>
     </div>
@@ -63,7 +66,7 @@ export default function App() {
                       <Route path="/items/:itemId" element={<ItemDetail />} />
                       <Route path="/purchase/new" element={<AddPurchase />} />
                       <Route path="/sale/new" element={<RecordSale />} />
-                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/reports" element={<Insights />} />
                       <Route path="/insights/:metric" element={<FinancialDetail />} />
                       <Route path="/purchases/history" element={<PurchaseHistory />} />
                       <Route path="/settings" element={<Settings />} />

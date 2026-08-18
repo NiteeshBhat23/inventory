@@ -1,6 +1,7 @@
 import {
   ChartBar,
   GearSix,
+  HandCoins,
   House,
   Minus,
   Moon,
@@ -8,7 +9,6 @@ import {
   Plus,
   Receipt,
   Sun,
-  Tag,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
@@ -16,6 +16,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useTheme } from '../lib/ThemeContext'
 import { IconButton } from './ui/Button'
 import { Sheet } from './ui/Sheet'
+import Logo from './Logo'
 
 /** Bottom nav holds destinations only.
  *
@@ -27,7 +28,7 @@ import { Sheet } from './ui/Sheet'
 const navItems = [
   { to: '/', label: 'Home', Icon: House, end: true },
   { to: '/inventory', label: 'Stock', Icon: Package, end: false },
-  { to: '/reports', label: 'Reports', Icon: ChartBar, end: false },
+  { to: '/reports', label: 'Insights', Icon: ChartBar, end: false },
   { to: '/settings', label: 'Settings', Icon: GearSix, end: false },
 ]
 
@@ -92,9 +93,7 @@ export default function Layout() {
             to="/"
             className="flex min-w-0 items-center gap-2 rounded-lg py-1 pr-2 text-ink transition-opacity hover:opacity-80"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-ink">
-              <Tag size={17} weight="fill" aria-hidden="true" />
-            </span>
+            <Logo size={26} className="shrink-0" />
             <span className="truncate font-display text-[0.9375rem] font-semibold">
               {shop?.name ?? 'ProfitPulse'}
             </span>
@@ -166,7 +165,7 @@ export default function Layout() {
             onClick={() => go('/purchase/new')}
           />
           <ActionRow
-            icon={<Tag size={22} weight="duotone" aria-hidden="true" />}
+            icon={<HandCoins size={22} weight="duotone" aria-hidden="true" />}
             title="Record Sale"
             description="Parts used or sold to a customer"
             onClick={() => go('/sale/new')}

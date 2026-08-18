@@ -45,7 +45,7 @@ export default function Settings() {
       })
       // Margin and low-stock defaults feed every derived item field, so the
       // cached item lists and dashboard are stale the moment they change.
-      invalidate('/dashboard', '/items')
+      invalidate('/dashboard', '/insights', '/items')
       await refreshShop()
       toast.success('Settings saved')
     } catch (err) {

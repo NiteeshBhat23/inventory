@@ -10,9 +10,48 @@ from ..schemas import ItemMergeRequest, ItemOut, ItemUpdate
 from .cost_engine import compute_suggested_selling_price, is_below_cost
 
 
+def log_price_change(
+    db: Session,
+    shop: ShopContext,
+    item: models.Item,
+    old_price,
+    new_price,
+    source: str = "manual",
+) -> None:
+    """Records a selling-price change for the Insights price-history chart.
+    A no-op when the price didn't actually move, so re-saving an item with an
+    unchanged price doesn't pollute the trend with a flat point."""
+    old_decimal = Decimal(old_price) if old_price is not None else None
+    new_decimal = Decimal(new_price)
+    if old_decimal == new_decimal:
+        return
+    db.add(
+        models.SellingPriceHistory(
+            item_id=item.item_id,
+            shop_id=shop.id,
+            old_price=old_price,
+            new_price=new_price,
+            source=source,
+        )
+    )
+
+
 def _to_item_out(item: models.Item, shop: ShopContext) -> ItemOut:
-    margin_pct = item.target_margin_pct if item.target_margin_pct is not None else shop.default_target_margin_pct
-    suggested = compute_suggested_selling_price(Decimal(item.avg_cost), Decimal(margin_pct)) if item.avg_cost else None
+    # target_margin is what the item WOULD sell at (used only to suggest a
+    # selling price for a brand-new item that doesn't have one yet).
+    target_margin = item.target_margin_pct if item.target_margin_pct is not None else shop.default_target_margin_pct
+    suggested = compute_suggested_selling_price(Decimal(item.avg_cost), Decimal(target_margin)) if item.avg_cost else None
+
+    # actual_margin_pct is what the item IS selling at right now, from its
+    # real selling_price and avg_cost — the number the UI shows next to the
+    # price everywhere (Inventory list, item detail, "best margin" sort).
+    # These two used to be conflated under one field: every item showed the
+    # shop's 20% *default target* instead of its own realized margin, so an
+    # item selling at a 50% margin still displayed "20% margin".
+    selling_price = Decimal(item.selling_price)
+    avg_cost = Decimal(item.avg_cost)
+    actual_margin_pct = float((selling_price - avg_cost) / selling_price * 100) if selling_price > 0 else None
+
     threshold = item.low_stock_threshold if item.low_stock_threshold is not None else shop.default_low_stock_threshold
     return ItemOut(
         item_id=item.item_id,
@@ -27,8 +66,8 @@ def _to_item_out(item: models.Item, shop: ShopContext) -> ItemOut:
         low_stock_threshold=item.low_stock_threshold,
         is_archived=item.is_archived,
         suggested_selling_price=suggested,
-        margin_pct=margin_pct,
-        is_below_cost=bool(item.selling_price) and is_below_cost(Decimal(item.selling_price), Decimal(item.avg_cost)),
+        margin_pct=actual_margin_pct,
+        is_below_cost=bool(item.selling_price) and is_below_cost(selling_price, avg_cost),
         is_low_stock=Decimal(item.stock_qty) <= Decimal(threshold),
     )
 
@@ -63,8 +102,12 @@ def update_item(db: Session, shop: ShopContext, item_id: uuid.UUID, patch: ItemU
     item = get_item(db, shop, item_id)
     if not item:
         return None
-    for field, value in patch.model_dump(exclude_unset=True).items():
+    old_selling_price = item.selling_price
+    changes = patch.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(item, field, value)
+    if "selling_price" in changes:
+        log_price_change(db, shop, item, old_selling_price, item.selling_price, source="manual")
     db.flush()
     return item
 

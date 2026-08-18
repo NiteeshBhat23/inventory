@@ -2,7 +2,7 @@ import { CaretRight, MagnifyingGlass, Package, Plus, X } from '@phosphor-icons/r
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '../lib/useQuery'
-import { moneyPrecise, percent, qty } from '../lib/format'
+import { moneyPrecise, qty } from '../lib/format'
 import type { Item } from '../lib/types'
 import BackHeader from '../components/BackHeader'
 import { ButtonLink } from '../components/ui/Button'
@@ -10,13 +10,12 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
 
-type SortKey = 'name' | 'stock' | 'cost' | 'margin'
+type SortKey = 'name' | 'stock' | 'cost'
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'stock', label: 'Stock' },
   { key: 'cost', label: 'Cost' },
-  { key: 'margin', label: 'Margin' },
 ]
 
 function Badge({ tone, children }: { tone: 'warn' | 'bad'; children: React.ReactNode }) {
@@ -74,8 +73,7 @@ export default function Inventory() {
     return [...filtered].sort((a, b) => {
       if (sort === 'name') return a.canonical_name.localeCompare(b.canonical_name)
       if (sort === 'stock') return b.stock_qty - a.stock_qty
-      if (sort === 'cost') return b.avg_cost - a.avg_cost
-      return (b.margin_pct ?? 0) - (a.margin_pct ?? 0)
+      return b.avg_cost - a.avg_cost
     })
   }, [items, category, sort])
 
@@ -220,7 +218,7 @@ export default function Inventory() {
                       item.is_below_cost ? 'font-semibold text-danger-text' : 'text-ink-muted',
                     )}
                   >
-                    {item.is_below_cost ? 'loss' : `${percent(item.margin_pct)} margin`}
+                    {item.is_below_cost ? 'selling below cost' : 'avg cost'}
                   </p>
                 </div>
 

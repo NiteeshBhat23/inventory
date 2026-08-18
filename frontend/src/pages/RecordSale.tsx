@@ -89,7 +89,7 @@ export default function RecordSale() {
     setBusy(true)
     try {
       const res = await api.post<SaleBatchResult>('/sales', { lines: payloadLines })
-      invalidate('/dashboard', '/items', '/sales', '/purchases')
+      invalidate('/dashboard', '/insights', '/items', '/sales', '/purchases')
       setResult(res)
       toast.success(`Sale recorded — profit ${money(res.total_profit)}`)
     } catch (err) {

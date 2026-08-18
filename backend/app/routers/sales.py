@@ -8,6 +8,7 @@ from ..deps import ShopContext, get_current_shop
 from ..schemas import SaleBatchIn, SaleBatchResult, SaleHistoryEntry
 from ..services import sales as sales_service
 from ..services.analytics import invalidate_dashboard_cache
+from ..services.insights import invalidate_insights_cache
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -25,6 +26,7 @@ def commit_sale(
         # line (negative stock, or below-cost needing override) and resubmits.
         return JSONResponse(status_code=409, content=e.result.model_dump(mode="json"))
     invalidate_dashboard_cache(shop.id)
+    invalidate_insights_cache(shop.id)
     return result
 
 

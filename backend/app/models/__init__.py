@@ -92,3 +92,25 @@ class SaleRecord(Base):
     sale_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     item: Mapped["Item"] = relationship(back_populates="sales")
+
+
+class SellingPriceHistory(Base):
+    """Selling-price change log.
+
+    Cost history needs no separate table — every purchase already records
+    avg_cost_after with a date, so the cost trend is just a query over
+    purchase_history. Selling price has no such trail: items.selling_price is
+    only ever the *current* value, so a chart of "what did I charge over
+    time" is impossible without logging every change as it happens. This
+    table starts that log from today forward; changes before this feature
+    shipped were never captured and can't be reconstructed."""
+
+    __tablename__ = "selling_price_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("items.item_id"), nullable=False, index=True)
+    shop_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False, index=True)
+    old_price: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    new_price: Mapped[float] = mapped_column(Numeric, nullable=False)
+    source: Mapped[str] = mapped_column(String, default="manual")  # 'manual' | 'auto_on_purchase'
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

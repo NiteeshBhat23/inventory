@@ -2,7 +2,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import dashboard, items, purchases, reports, sales, shops
+from .routers import dashboard, insights, items, purchases, sales, shops
 
 settings = get_settings()
 
@@ -22,7 +22,7 @@ api_router.include_router(items.router)
 api_router.include_router(purchases.router)
 api_router.include_router(sales.router)
 api_router.include_router(dashboard.router)
-api_router.include_router(reports.router)
+api_router.include_router(insights.router)
 
 
 @api_router.get("/health")

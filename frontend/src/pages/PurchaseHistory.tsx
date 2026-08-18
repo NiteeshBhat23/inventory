@@ -9,6 +9,7 @@ import { Card, CardHeader, CardList, CardListRow } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { SelectField } from '../components/ui/Field'
+import { PERIODS } from '../lib/periods'
 
 /** Groups the flat purchase list by calendar day, matching the sale-history
  *  drill-down — a shop owner thinks in "what did I spend today / this week". */
@@ -59,9 +60,11 @@ export default function PurchaseHistory() {
 
       <Card>
         <SelectField label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          <option value={7}>Last 7 days</option>
-          <option value={30}>Last 30 days</option>
-          <option value={90}>Last 90 days</option>
+          {PERIODS.map((p) => (
+            <option key={p.days} value={p.days}>
+              {p.label}
+            </option>
+          ))}
         </SelectField>
       </Card>
 
