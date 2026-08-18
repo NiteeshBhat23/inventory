@@ -41,13 +41,14 @@ export default function Login() {
   const { session, shop, shopLoadError, refreshShop, signOut } = useAuth()
   const toast = useToast()
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [shopName, setShopName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault()
@@ -64,6 +65,27 @@ export default function Login() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setBusy(true)
+    try {
+      // The link this sends back to `${origin}/reset-password` — that path
+      // must be listed under Supabase's Authentication -> URL Configuration
+      // -> Redirect URLs, or the request succeeds here but the email link
+      // bounces to Supabase's default site URL instead.
+      const { error: e1 } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (e1) throw e1
+      setResetSent(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send reset email')
     } finally {
       setBusy(false)
     }
@@ -158,6 +180,67 @@ export default function Login() {
     )
   }
 
+  if (mode === 'forgot') {
+    return (
+      <Shell>
+        <Brand />
+        <form
+          onSubmit={handleForgotPassword}
+          className="space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-card)]"
+        >
+          <h1 className="text-center font-display text-lg font-semibold text-ink">Reset your password</h1>
+
+          {resetSent ? (
+            <p className="text-center text-sm text-ink-muted">
+              If an account exists for <span className="font-medium text-ink">{email}</span>, we've
+              sent a link to reset your password. Check your inbox.
+            </p>
+          ) : (
+            <>
+              <p className="text-center text-sm text-ink-muted">
+                Enter your email and we'll send you a link to reset your password.
+              </p>
+              <TextField
+                label="Email"
+                type="email"
+                required
+                autoFocus
+                autoComplete="email"
+                inputMode="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+
+              {error && (
+                <p role="alert" className="flex items-start gap-1.5 text-sm font-medium text-danger-text">
+                  <WarningCircle size={16} weight="fill" className="mt-0.5 shrink-0" aria-hidden="true" />
+                  {error}
+                </p>
+              )}
+
+              <Button type="submit" fullWidth size="lg" loading={busy}>
+                Send reset link
+              </Button>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="min-h-11 w-full text-center text-sm text-ink-muted transition-colors hover:text-ink"
+            onClick={() => {
+              setMode('signin')
+              setError(null)
+              setResetSent(false)
+            }}
+          >
+            <span className="font-semibold text-brand-text">Back to log in</span>
+          </button>
+        </form>
+      </Shell>
+    )
+  }
+
   return (
     <Shell>
       <Brand />
@@ -203,6 +286,20 @@ export default function Login() {
             )}
           </button>
         </div>
+
+        {mode === 'signin' && (
+          <button
+            type="button"
+            className="-mt-2 block text-sm font-medium text-brand-text hover:underline"
+            onClick={() => {
+              setMode('forgot')
+              setError(null)
+              setResetSent(false)
+            }}
+          >
+            Forgot password?
+          </button>
+        )}
 
         {error && (
           <p role="alert" className="flex items-start gap-1.5 text-sm font-medium text-danger-text">

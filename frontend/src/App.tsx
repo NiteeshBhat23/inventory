@@ -6,6 +6,7 @@ import { ToastProvider } from './components/ui/Toast'
 import { ConfirmProvider } from './components/ui/ConfirmDialog'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Logo from './components/Logo'
 import {
@@ -56,8 +57,12 @@ function RouteFallback() {
 }
 
 function Gate({ children }: { children: React.ReactNode }) {
-  const { session, shop, loading, shopResolved } = useAuth()
+  const { session, shop, loading, shopResolved, passwordRecovery } = useAuth()
   if (loading) return <BootScreen />
+  // A password-recovery link signs the user in with a real session, but they
+  // must set a new password before landing in the app — this takes priority
+  // over every other state below.
+  if (passwordRecovery) return <ResetPassword />
   // A fresh login sets `session` before the shop lookup resolves — without
   // this, that one frame looks identical to "no shop yet" and flashes the
   // create-shop form at an owner who already has one.

@@ -23,6 +23,13 @@ interface AuthState {
   // opposed to a confirmed "you have no shop yet" (404), which just leaves
   // shopLoadError null and shop null so the create-shop form shows normally.
   shopLoadError: string | null
+  // True from the moment Supabase detects a password-recovery link in the URL
+  // until the user has set a new password (or signed out). The recovery link
+  // signs the user in with a real session so they can call updateUser(), but
+  // that session must not fall through to the normal app shell — the Gate
+  // uses this flag to show the "set a new password" screen instead.
+  passwordRecovery: boolean
+  clearPasswordRecovery: () => void
   refreshShop: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -35,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [shopLoadError, setShopLoadError] = useState<string | null>(null)
   const [shopResolved, setShopResolved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   // The user id we last loaded a shop for. supabase-js re-emits SIGNED_IN for
   // an unchanged user on a timer (and on tab focus / token refresh); keying off
@@ -100,7 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // Fired once supabase-js parses a recovery link's tokens out of the URL.
+      // It carries a real session, but the user hasn't proven a new password
+      // yet — flag it so the Gate can intercept before anything else renders.
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true)
+      }
       setAuthToken(newSession)
       // Keep the previous object when the token is unchanged. supabase hands
       // us a fresh Session instance on every re-emission, and storing it would
@@ -126,10 +140,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear here too rather than waiting for the sign-out event, so signing
     // straight back in always reloads the shop.
     loadedForUser.current = null
+    setPasswordRecovery(false)
   }
 
   return (
-    <AuthCtx.Provider value={{ session, shop, loading, shopResolved, shopLoadError, refreshShop, signOut }}>
+    <AuthCtx.Provider
+      value={{
+        session,
+        shop,
+        loading,
+        shopResolved,
+        shopLoadError,
+        passwordRecovery,
+        clearPasswordRecovery: () => setPasswordRecovery(false),
+        refreshShop,
+        signOut,
+      }}
+    >
       {children}
     </AuthCtx.Provider>
   )
