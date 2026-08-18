@@ -5,12 +5,14 @@ from .config import get_settings
 
 settings = get_settings()
 
-# Use the psycopg (v3) driver explicitly — SQLAlchemy defaults a bare
-# "postgresql://" URL to psycopg2, which we no longer install (it has no
-# prebuilt wheels for newer Python versions like Vercel's build image ships).
+# Use the pg8000 driver explicitly — SQLAlchemy defaults a bare
+# "postgresql://" URL to psycopg2. We use pg8000 instead of psycopg2/psycopg
+# because it's pure Python (no compiled C extension), so it has no wheel-
+# availability problem on Vercel's build image, which tracks new CPython
+# releases (e.g. 3.14) faster than C-extension packages publish wheels for.
 _database_url = settings.database_url
 if _database_url.startswith("postgresql://"):
-    _database_url = _database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    _database_url = _database_url.replace("postgresql://", "postgresql+pg8000://", 1)
 
 engine = create_engine(_database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
