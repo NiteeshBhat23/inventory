@@ -107,7 +107,15 @@ export function useQuery<T>(path: string | null) {
   )
 
   useEffect(() => {
-    setData(path ? peek<T>(path) : undefined)
+    // Keep the outgoing data on screen while a new path loads, rather than
+    // clearing to undefined and dropping the page back to a full skeleton.
+    // Switching period or typing a search used to blank the whole screen for
+    // one round trip; now the previous numbers stay up (dimmed by the callers'
+    // `loading` styling) and swap in place when the new ones land.
+    const next = path ? peek<T>(path) : undefined
+    if (next !== undefined) setData(next)
+    else if (!path) setData(undefined)
+    setError(null)
     run(false)
   }, [path, run])
 

@@ -2,6 +2,7 @@ import { CaretRight, MagnifyingGlass, Package, Plus, X } from '@phosphor-icons/r
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '../lib/useQuery'
+import { warmOnIntent } from '../lib/routeWarmup'
 import { moneyPrecise, qty } from '../lib/format'
 import type { Item } from '../lib/types'
 import BackHeader from '../components/BackHeader'
@@ -148,6 +149,7 @@ export default function Inventory() {
             <li key={item.item_id}>
               <Link
                 to={`/items/${item.item_id}`}
+                {...warmOnIntent(`/items/${item.item_id}`)}
                 className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-[var(--shadow-card)] transition-colors duration-150 hover:bg-surface-2 active:scale-[0.995]"
               >
                 <div className="min-w-0 flex-1">

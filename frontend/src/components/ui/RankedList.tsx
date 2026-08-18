@@ -1,6 +1,7 @@
 import { CaretRight } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import type { NamedValue } from '../../lib/types'
+import { warmOnIntent } from '../../lib/routeWarmup'
 import { Card, CardHeader } from './Card'
 
 /** Ranked list with a proportional bar.
@@ -67,6 +68,7 @@ export function RankedList({
                 {linkFor ? (
                   <Link
                     to={linkFor(d)}
+                    {...warmOnIntent(linkFor(d))}
                     className="-m-1 block rounded-lg p-1 transition-colors hover:bg-surface-2 active:scale-[0.99]"
                   >
                     {bar}

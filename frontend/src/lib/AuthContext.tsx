@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import { ApiError, setAuthToken } from './apiClient'
@@ -9,12 +9,16 @@ interface AuthState {
   session: Session | null
   shop: Shop | null
   loading: boolean
-  // True while a shop lookup is in flight — distinct from `loading`, which
-  // only covers the very first boot. Without this, a fresh interactive login
-  // renders one frame with session set but shop still null, which reads
-  // exactly like "no shop yet" and briefly shows the create-shop form to
-  // existing owners before their real shop arrives.
-  shopLoading: boolean
+  // False until the first shop lookup for this session has finished, one way
+  // or the other. Without it, a fresh login renders a frame with `session` set
+  // but `shop` still null, which is indistinguishable from "no shop yet" and
+  // flashes the create-shop form at owners who already have one.
+  //
+  // Deliberately monotonic — it latches true and only resets on sign-out.
+  // An "is a request in flight" flag would flip back on every background
+  // refresh, and since the gate unmounts the whole shell while it is false,
+  // that oscillated: shell mounts, refresh starts, shell unmounts, repeat.
+  shopResolved: boolean
   // Set only when the shop lookup itself failed (network/server error) — as
   // opposed to a confirmed "you have no shop yet" (404), which just leaves
   // shopLoadError null and shop null so the create-shop form shows normally.
@@ -29,11 +33,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [shop, setShop] = useState<Shop | null>(null)
   const [shopLoadError, setShopLoadError] = useState<string | null>(null)
-  const [shopLoading, setShopLoading] = useState(true)
+  const [shopResolved, setShopResolved] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // The user id we last loaded a shop for. supabase-js re-emits SIGNED_IN for
+  // an unchanged user on a timer (and on tab focus / token refresh); keying off
+  // this makes the handler idempotent so only a genuine account change refetches.
+  const loadedForUser = useRef<string | null>(null)
+
   async function refreshShop() {
-    setShopLoading(true)
     try {
       invalidate('/shops/me')
       const s = await fetchCached<Shop>('/shops/me')
@@ -55,41 +63,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       }
     } finally {
-      setShopLoading(false)
+      setShopResolved(true)
     }
   }
 
   useEffect(() => {
+    /** Loads the shop for a session, unless that user's shop is already loaded.
+     *  Claims the user id synchronously, before the first await, so the boot
+     *  lookup and the listener can't both fire a request for the same user. */
+    async function ensureShopFor(next: Session | null) {
+      const userId = next?.user?.id ?? null
+      if (!userId) {
+        loadedForUser.current = null
+        setShop(null)
+        setShopLoadError(null)
+        setShopResolved(false)
+        return
+      }
+      if (loadedForUser.current === userId) return
+      loadedForUser.current = userId
+      // Boot used to be strictly serial: session -> /shops/me -> render ->
+      // /dashboard, three round trips deep before the first number appeared.
+      // The dashboard doesn't depend on the shop response, so start it now
+      // and let it land in the cache while /shops/me is still in flight —
+      // Dashboard then paints from cache on its first render.
+      prefetch('/dashboard?days=30')
+      await refreshShop()
+    }
+
     supabase.auth.getSession().then(async ({ data }) => {
       // Mirror the token before any request goes out, so the very first call
       // takes the synchronous path instead of re-awaiting getSession().
       setAuthToken(data.session)
       setSession(data.session)
-      if (data.session) {
-        // Boot used to be strictly serial: session -> /shops/me -> render ->
-        // /dashboard, three round trips deep before the first number appeared.
-        // The dashboard doesn't depend on the shop response, so start it now
-        // and let it land in the cache while /shops/me is still in flight —
-        // Dashboard then paints from cache on its first render.
-        prefetch('/dashboard?days=30')
-        await refreshShop()
-      } else {
-        setShopLoading(false)
-      }
+      await ensureShopFor(data.session)
       setLoading(false)
     })
+
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setAuthToken(newSession)
-      setSession(newSession)
-      if (newSession) {
-        prefetch('/dashboard?days=30')
-        await refreshShop()
-      } else {
-        setShop(null)
-        setShopLoadError(null)
-        setShopLoading(false)
-      }
+      // Keep the previous object when the token is unchanged. supabase hands
+      // us a fresh Session instance on every re-emission, and storing it would
+      // re-render every consumer of this context several times a minute for no
+      // actual change.
+      setSession((prev) =>
+        prev?.access_token === newSession?.access_token ? prev : newSession,
+      )
+      await ensureShopFor(newSession)
     })
+
     return () => sub.subscription.unsubscribe()
   }, [])
 
@@ -100,11 +122,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     invalidate('/')
     setShop(null)
     setShopLoadError(null)
-    setShopLoading(false)
+    setShopResolved(false)
+    // Clear here too rather than waiting for the sign-out event, so signing
+    // straight back in always reloads the shop.
+    loadedForUser.current = null
   }
 
   return (
-    <AuthCtx.Provider value={{ session, shop, loading, shopLoading, shopLoadError, refreshShop, signOut }}>
+    <AuthCtx.Provider value={{ session, shop, loading, shopResolved, shopLoadError, refreshShop, signOut }}>
       {children}
     </AuthCtx.Provider>
   )

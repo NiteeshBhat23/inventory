@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { warmOnIntent } from '../lib/routeWarmup'
 import { cn } from '../lib/cn'
 
 type Tone = 'default' | 'good' | 'warn' | 'bad'
@@ -74,7 +75,7 @@ export default function KpiTile({ label, value, icon, tone = 'default', to, size
   )
 
   return to ? (
-    <Link to={to} className={className}>
+    <Link to={to} className={className} {...warmOnIntent(to)}>
       {body}
     </Link>
   ) : (

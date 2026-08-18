@@ -8,19 +8,31 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Logo from './components/Logo'
+import {
+  loadAddPurchase,
+  loadFinancialDetail,
+  loadInsights,
+  loadInventory,
+  loadItemDetail,
+  loadPurchaseHistory,
+  loadRecordSale,
+  loadSettings,
+} from './lib/routeWarmup'
 
 // Dashboard and Login stay in the entry bundle — one of the two is always the
 // first thing rendered, so deferring them would only add a round trip to the
-// critical path. Everything else is fetched on first navigation, which keeps
-// the initial download to what the landing screen actually needs.
-const Inventory = lazy(() => import('./pages/Inventory'))
-const ItemDetail = lazy(() => import('./pages/ItemDetail'))
-const AddPurchase = lazy(() => import('./pages/AddPurchase'))
-const RecordSale = lazy(() => import('./pages/RecordSale'))
-const Insights = lazy(() => import('./pages/Insights'))
-const Settings = lazy(() => import('./pages/Settings'))
-const FinancialDetail = lazy(() => import('./pages/FinancialDetail'))
-const PurchaseHistory = lazy(() => import('./pages/PurchaseHistory'))
+// critical path. Everything else is code-split, but warmed during idle by
+// routeWarmup rather than downloaded on first click, so splitting no longer
+// costs a visible wait. These must be the loaders routeWarmup exports, or the
+// warm copy and the rendered copy would be two separate downloads.
+const Inventory = lazy(loadInventory)
+const ItemDetail = lazy(loadItemDetail)
+const AddPurchase = lazy(loadAddPurchase)
+const RecordSale = lazy(loadRecordSale)
+const Insights = lazy(loadInsights)
+const Settings = lazy(loadSettings)
+const FinancialDetail = lazy(loadFinancialDetail)
+const PurchaseHistory = lazy(loadPurchaseHistory)
 
 function BootScreen() {
   return (
@@ -44,12 +56,12 @@ function RouteFallback() {
 }
 
 function Gate({ children }: { children: React.ReactNode }) {
-  const { session, shop, loading, shopLoading } = useAuth()
+  const { session, shop, loading, shopResolved } = useAuth()
   if (loading) return <BootScreen />
   // A fresh login sets `session` before the shop lookup resolves — without
   // this, that one frame looks identical to "no shop yet" and flashes the
   // create-shop form at an owner who already has one.
-  if (session && shopLoading) return <BootScreen />
+  if (session && !shopResolved) return <BootScreen />
   if (!session || !shop) return <Login />
   return <>{children}</>
 }

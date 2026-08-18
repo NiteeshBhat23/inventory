@@ -10,10 +10,11 @@ import {
   Receipt,
   Sun,
 } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { useTheme } from '../lib/ThemeContext'
+import { warmAllRoutes, warmOnIntent, warmRoute } from '../lib/routeWarmup'
 import { IconButton } from './ui/Button'
 import { Sheet } from './ui/Sheet'
 import Logo from './Logo'
@@ -47,6 +48,7 @@ function NavItem({
     <NavLink
       to={to}
       end={end}
+      {...warmOnIntent(to)}
       className={({ isActive }) =>
         `group relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors duration-150 ${
           isActive ? 'text-brand-text' : 'text-ink-muted hover:text-ink'
@@ -76,6 +78,11 @@ export default function Layout() {
   const { resolved, setPref } = useTheme()
   const navigate = useNavigate()
   const [actionsOpen, setActionsOpen] = useState(false)
+
+  // Once the first screen has painted, quietly pull every other route's chunk
+  // and first payload during idle time. By the time any nav item is tapped the
+  // work is already done, so the click renders from cache in a single frame.
+  useEffect(() => warmAllRoutes(), [])
 
   function go(path: string) {
     setActionsOpen(false)
@@ -130,7 +137,14 @@ export default function Layout() {
           <div className="relative flex w-16 shrink-0 justify-center">
             <button
               type="button"
-              onClick={() => setActionsOpen(true)}
+              onClick={() => {
+                // Opening the sheet is a reliable signal one of the two
+                // actions is about to be tapped — warm both while the user
+                // is still reading the options.
+                warmRoute('/purchase/new')
+                warmRoute('/sale/new')
+                setActionsOpen(true)
+              }}
               aria-label="New entry"
               aria-haspopup="dialog"
               aria-expanded={actionsOpen}
