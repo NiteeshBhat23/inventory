@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
@@ -16,14 +16,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(shops.router)
-app.include_router(items.router)
-app.include_router(purchases.router)
-app.include_router(sales.router)
-app.include_router(dashboard.router)
-app.include_router(reports.router)
+api_router = APIRouter(prefix="/api")
+api_router.include_router(shops.router)
+api_router.include_router(items.router)
+api_router.include_router(purchases.router)
+api_router.include_router(sales.router)
+api_router.include_router(dashboard.router)
+api_router.include_router(reports.router)
 
 
-@app.get("/health")
+@api_router.get("/health")
 def health():
     return {"status": "ok"}
+
+
+app.include_router(api_router)

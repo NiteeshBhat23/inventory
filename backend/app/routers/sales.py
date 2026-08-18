@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..db import get_db
 from ..deps import get_current_shop
-from ..schemas import SaleBatchIn, SaleBatchResult
+from ..schemas import SaleBatchIn, SaleBatchResult, SaleHistoryEntry
 from ..services import sales as sales_service
 from ..services.analytics import invalidate_dashboard_cache
 
@@ -26,3 +26,15 @@ def commit_sale(
         return JSONResponse(status_code=409, content=e.result.model_dump(mode="json"))
     invalidate_dashboard_cache(shop.id)
     return result
+
+
+@router.get("", response_model=list[SaleHistoryEntry])
+def sale_history(
+    days: int = 90,
+    shop: models.Shop = Depends(get_current_shop),
+    db: Session = Depends(get_db),
+):
+    """Line-level sale history — powers the Profit/Revenue drill-down on the
+    dashboard, where the owner wants to see every transaction behind a total,
+    not just the rolled-up number."""
+    return sales_service.list_sale_history(db, shop, days)

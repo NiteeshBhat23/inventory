@@ -1,9 +1,10 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import SaleBatchIn, SaleBatchResult, SaleLineResult
+from ..schemas import SaleBatchIn, SaleBatchResult, SaleHistoryEntry, SaleLineResult
 from . import items as items_service
 from .cost_engine import evaluate_sale_line
 
@@ -113,3 +114,32 @@ def commit_sale_batch(db: Session, shop: models.Shop, batch: SaleBatchIn) -> Sal
         below_cost_count=sum(1 for l in lines if l.sold_below_cost),
         lines=lines,
     )
+
+
+def list_sale_history(db: Session, shop: models.Shop, days: int = 90) -> list[SaleHistoryEntry]:
+    """Line-level sale history, newest first, with item names resolved —
+    powers the Profit/Revenue drill-down: every transaction underneath those
+    dashboard totals, not just the rolled-up number."""
+    since = datetime.utcnow() - timedelta(days=days)
+    rows = (
+        db.query(models.SaleRecord, models.Item.canonical_name)
+        .join(models.Item, models.Item.item_id == models.SaleRecord.item_id)
+        .filter(models.SaleRecord.shop_id == shop.id, models.SaleRecord.sale_date >= since)
+        .order_by(models.SaleRecord.sale_date.desc())
+        .all()
+    )
+    return [
+        SaleHistoryEntry(
+            sale_id=s.sale_id,
+            item_id=s.item_id,
+            item_name=item_name,
+            quantity=s.quantity,
+            sale_price=s.sale_price,
+            cost_at_sale=s.cost_at_sale,
+            revenue=Decimal(s.quantity) * Decimal(s.sale_price),
+            profit=s.profit,
+            sold_below_cost=s.sold_below_cost,
+            sale_date=s.sale_date,
+        )
+        for s, item_name in rows
+    ]

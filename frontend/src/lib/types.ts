@@ -89,6 +89,19 @@ export interface SaleBatchResult {
   lines: SaleLineResult[]
 }
 
+export interface SaleHistoryEntry {
+  sale_id: string
+  item_id: string
+  item_name: string
+  quantity: number
+  sale_price: number
+  cost_at_sale: number
+  revenue: number
+  profit: number
+  sold_below_cost: boolean
+  sale_date: string
+}
+
 export interface NamedValue {
   name: string
   value: number

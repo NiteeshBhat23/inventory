@@ -71,6 +71,36 @@ then use "Add to Home Screen" (Chrome/Safari share menu).
 4. **Inventory / Item Detail** — search, sort, per-item purchase history and price trend.
 5. **Reports** — supplier spend, category profitability, CSV export of purchase/sale history.
 
+## Deploying to Vercel (single project)
+
+The backend and frontend deploy together as **one Vercel project**, rooted at this
+`inventory/` directory:
+
+- `vercel.json` builds the frontend (`frontend/dist`) as static output and rewrites
+  `/api/*` requests to a Python serverless function.
+- [`api/index.py`](api/index.py) imports the FastAPI `app` from `backend/app/main.py`
+  and Vercel's Python runtime serves it as an ASGI function.
+- Root [`requirements.txt`](requirements.txt) (mirrors `backend/requirements.txt`) is
+  what Vercel's Python builder installs — keep them in sync if you change backend deps.
+- All API routes are mounted under `/api` (e.g. `/api/items`, `/api/health`), so the
+  whole app is served from a single domain with no CORS needed in production.
+
+Steps:
+
+1. In Vercel, **New Project** → import this repo → set the **Root Directory** to
+   `inventory` (since this repo lives alongside sibling projects).
+2. Add environment variables (Project Settings → Environment Variables):
+   - `DATABASE_URL`, `SUPABASE_URL`, `CORS_ORIGINS` (backend — same values as
+     `backend/.env`)
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (frontend)
+   - `VITE_API_BASE_URL=/api` (relative — same origin, no separate backend URL)
+3. Deploy. Vercel builds the frontend via `buildCommand` and deploys `api/index.py`
+   as a serverless function automatically.
+
+For local dev, keep running frontend and backend separately as described above —
+`frontend/.env.local`'s `VITE_API_BASE_URL=http://localhost:8000/api` points at your
+local `uvicorn` server (routes are prefixed with `/api` everywhere now, dev included).
+
 ## What's deferred to Phase 2
 
 AI bill-scanning (photograph a bill instead of typing it in) — see Section 9 of

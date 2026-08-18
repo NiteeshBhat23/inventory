@@ -160,6 +160,24 @@ class SaleRecordOut(BaseModel):
     sale_date: datetime
 
 
+class SaleHistoryEntry(BaseModel):
+    """One line-level sale record with the item name resolved — this is what
+    powers the Profit/Revenue drill-down screens: every transaction that rolled
+    up into those dashboard totals, so the owner can see exactly where the
+    number came from rather than trusting a single aggregate figure."""
+
+    sale_id: uuid.UUID
+    item_id: uuid.UUID
+    item_name: str
+    quantity: float
+    sale_price: float
+    cost_at_sale: float
+    revenue: float
+    profit: float
+    sold_below_cost: bool
+    sale_date: datetime
+
+
 # ---------- Dashboard / Analytics ----------
 class KpiSummary(BaseModel):
     inventory_value: float

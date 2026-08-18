@@ -12,6 +12,7 @@ import AddPurchase from './pages/AddPurchase'
 import RecordSale from './pages/RecordSale'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import FinancialDetail from './pages/FinancialDetail'
 
 function BootScreen() {
   return (
@@ -47,6 +48,7 @@ export default function App() {
                     <Route path="/purchase/new" element={<AddPurchase />} />
                     <Route path="/sale/new" element={<RecordSale />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/insights/:metric" element={<FinancialDetail />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Route>

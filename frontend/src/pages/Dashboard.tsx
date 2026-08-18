@@ -1,5 +1,4 @@
 import {
-  ArrowDown,
   ArrowUp,
   CaretRight,
   CurrencyInr,
@@ -101,14 +100,16 @@ export default function Dashboard() {
               value={money(data.kpis.profit)}
               tone="good"
               icon={<TrendUp size={17} weight="fill" />}
+              to="/insights/profit"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
             <KpiTile
               label="Revenue"
               value={money(data.kpis.revenue)}
               icon={<CurrencyInr size={13} weight="bold" />}
+              to="/insights/revenue"
             />
             <KpiTile
               label="Low stock"
@@ -117,24 +118,8 @@ export default function Dashboard() {
               icon={<Warning size={13} weight="fill" />}
               to="/inventory"
             />
-            <KpiTile
-              label="Below cost"
-              value={String(data.kpis.below_cost_count)}
-              tone={data.kpis.below_cost_count ? 'bad' : 'default'}
-              icon={<ArrowDown size={13} weight="bold" />}
-              to="/inventory"
-            />
           </div>
 
-          {data.below_cost_items.length > 0 && (
-            <AlertBanner tone="bad">
-              <strong className="font-semibold">{data.below_cost_items.length} item(s)</strong> are
-              priced at or below what they cost you.{' '}
-              <Link to="/inventory" className="font-semibold underline underline-offset-2">
-                Review pricing
-              </Link>
-            </AlertBanner>
-          )}
           {data.low_stock_items.length > 0 && (
             <AlertBanner tone="warn">
               <strong className="font-semibold">{data.low_stock_items.length} item(s)</strong> have
