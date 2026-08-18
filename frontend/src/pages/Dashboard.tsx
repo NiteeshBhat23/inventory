@@ -9,9 +9,9 @@ import {
   TrendUp,
   Warning,
 } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/apiClient'
+import { useQuery } from '../lib/useQuery'
 import { money, qty, relativeDate } from '../lib/format'
 import type { DashboardData } from '../lib/types'
 import KpiTile from '../components/KpiTile'
@@ -31,24 +31,7 @@ const RANGES = [
 
 export default function Dashboard() {
   const [days, setDays] = useState(30)
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    api
-      .get<DashboardData>(`/dashboard?days=${days}`)
-      .then((d) => {
-        if (!cancelled) setData(d)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [days])
+  const { data, loading } = useQuery<DashboardData>(`/dashboard?days=${days}`)
 
   const hasActivity = !!data && data.recent_activity.length > 0
 
@@ -91,7 +74,7 @@ export default function Dashboard() {
               size="hero"
               label="Stock value"
               value={money(data.kpis.inventory_value)}
-              icon={<Package size={17} weight="fill" />}
+              icon={<Package size={17} weight="duotone" />}
               to="/inventory"
             />
             <KpiTile
@@ -99,7 +82,7 @@ export default function Dashboard() {
               label="Profit"
               value={money(data.kpis.profit)}
               tone="good"
-              icon={<TrendUp size={17} weight="fill" />}
+              icon={<TrendUp size={17} weight="duotone" />}
               to="/insights/profit"
             />
           </div>
@@ -115,7 +98,7 @@ export default function Dashboard() {
               label="Low stock"
               value={String(data.kpis.low_stock_count)}
               tone={data.kpis.low_stock_count ? 'warn' : 'default'}
-              icon={<Warning size={13} weight="fill" />}
+              icon={<Warning size={13} weight="duotone" />}
               to="/inventory"
             />
           </div>
@@ -133,7 +116,7 @@ export default function Dashboard() {
           {!hasActivity ? (
             <Card>
               <EmptyState
-                icon={<Sparkle size={24} weight="fill" />}
+                icon={<Sparkle size={24} weight="duotone" />}
                 title="Nothing recorded yet"
                 description="Log your first purchase and this dashboard will start tracking your costs, margins and stock levels."
                 action={
@@ -151,12 +134,14 @@ export default function Dashboard() {
                   data={data.top_items_by_profit}
                   format={money}
                   emptyLabel="No sales in this period."
+                  linkFor={(d) => `/inventory?q=${encodeURIComponent(d.name)}`}
                 />
                 <RankedList
                   title="Most sold"
                   data={data.top_items_by_volume}
                   format={qty}
                   emptyLabel="No sales in this period."
+                  linkFor={(d) => `/inventory?q=${encodeURIComponent(d.name)}`}
                 />
               </div>
 
@@ -166,12 +151,14 @@ export default function Dashboard() {
                   data={data.category_breakdown}
                   format={money}
                   emptyLabel="No items yet."
+                  linkFor={(d) => `/inventory?category=${encodeURIComponent(d.name)}`}
                 />
                 <RankedList
                   title="Spend by supplier"
                   data={data.supplier_spend}
                   format={money}
                   emptyLabel="No purchases in this period."
+                  linkFor={(d) => `/purchases/history?supplier=${encodeURIComponent(d.name)}`}
                 />
               </div>
 
@@ -199,12 +186,12 @@ export default function Dashboard() {
                             className={cn(
                               'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
                               isSale
-                                ? 'bg-brand-soft text-brand-soft-ink'
+                                ? 'bg-good-soft text-good-soft-ink'
                                 : 'bg-surface-2 text-ink-muted',
                             )}
                           >
                             {isSale ? (
-                              <Tag size={15} weight="fill" />
+                              <Tag size={15} weight="duotone" />
                             ) : (
                               <ArrowUp size={15} weight="bold" />
                             )}

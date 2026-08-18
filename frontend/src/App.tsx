@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { ThemeProvider } from './lib/ThemeContext'
@@ -6,13 +7,19 @@ import { ConfirmProvider } from './components/ui/ConfirmDialog'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Inventory from './pages/Inventory'
-import ItemDetail from './pages/ItemDetail'
-import AddPurchase from './pages/AddPurchase'
-import RecordSale from './pages/RecordSale'
-import Reports from './pages/Reports'
-import Settings from './pages/Settings'
-import FinancialDetail from './pages/FinancialDetail'
+
+// Dashboard and Login stay in the entry bundle — one of the two is always the
+// first thing rendered, so deferring them would only add a round trip to the
+// critical path. Everything else is fetched on first navigation, which keeps
+// the initial download to what the landing screen actually needs.
+const Inventory = lazy(() => import('./pages/Inventory'))
+const ItemDetail = lazy(() => import('./pages/ItemDetail'))
+const AddPurchase = lazy(() => import('./pages/AddPurchase'))
+const RecordSale = lazy(() => import('./pages/RecordSale'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Settings = lazy(() => import('./pages/Settings'))
+const FinancialDetail = lazy(() => import('./pages/FinancialDetail'))
+const PurchaseHistory = lazy(() => import('./pages/PurchaseHistory'))
 
 function BootScreen() {
   return (
@@ -23,6 +30,14 @@ function BootScreen() {
       </div>
     </div>
   )
+}
+
+/** Chunk-load placeholder. Deliberately empty rather than a second spinner:
+ *  the shell (header + nav) is already painted around it, and a route chunk
+ *  on a warm cache resolves in a frame or two — flashing a spinner there
+ *  reads as slower than showing nothing. */
+function RouteFallback() {
+  return <div className="min-h-[50vh]" aria-busy="true" />
 }
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -40,19 +55,22 @@ export default function App() {
           <ConfirmProvider>
             <AuthProvider>
               <Gate>
-                <Routes>
-                  <Route element={<Layout />}>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/inventory" element={<Inventory />} />
-                    <Route path="/items/:itemId" element={<ItemDetail />} />
-                    <Route path="/purchase/new" element={<AddPurchase />} />
-                    <Route path="/sale/new" element={<RecordSale />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/insights/:metric" element={<FinancialDetail />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Route>
-                </Routes>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route element={<Layout />}>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/inventory" element={<Inventory />} />
+                      <Route path="/items/:itemId" element={<ItemDetail />} />
+                      <Route path="/purchase/new" element={<AddPurchase />} />
+                      <Route path="/sale/new" element={<RecordSale />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/insights/:metric" element={<FinancialDetail />} />
+                      <Route path="/purchases/history" element={<PurchaseHistory />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Route>
+                  </Routes>
+                </Suspense>
               </Gate>
             </AuthProvider>
           </ConfirmProvider>

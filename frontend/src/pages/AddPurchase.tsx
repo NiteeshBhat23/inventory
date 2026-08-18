@@ -2,6 +2,7 @@ import { ArrowRight, CheckCircle, Plus, Sparkle, Trash } from '@phosphor-icons/r
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/apiClient'
+import { invalidate } from '../lib/useQuery'
 import { moneyPrecise, qty } from '../lib/format'
 import { previewNewAvgCost } from '../lib/costPreview'
 import type { Item, PurchaseBatchResult } from '../lib/types'
@@ -100,6 +101,7 @@ export default function AddPurchase() {
         purchase_date: date,
         lines: payloadLines,
       })
+      invalidate('/dashboard', '/items', '/sales', '/purchases')
       setResult(res)
       toast.success(
         `Purchase saved — ${res.items_updated + res.new_items_added} item(s) updated`,
@@ -118,15 +120,15 @@ export default function AddPurchase() {
       <div className="space-y-4">
         <BackHeader title="Purchase saved" fallback="/" />
 
-        <Card className="border-brand/30 bg-brand-soft">
+        <Card className="border-good/30 bg-good-soft">
           <div className="flex items-start gap-3">
             <CheckCircle
               size={22}
-              weight="fill"
-              className="mt-0.5 shrink-0 text-brand-soft-ink"
+              weight="duotone"
+              className="mt-0.5 shrink-0 text-good-soft-ink"
               aria-hidden="true"
             />
-            <div className="text-sm text-brand-soft-ink">
+            <div className="text-sm text-good-soft-ink">
               <p className="font-semibold">
                 {result.items_updated} item(s) updated
                 {result.new_items_added > 0 && `, ${result.new_items_added} newly added`}
@@ -311,7 +313,7 @@ export default function AddPurchase() {
                     while it's still easy to fix. */}
                 {preview !== null && (
                   <div className="flex items-center gap-2 rounded-xl bg-brand-soft px-3 py-2.5 text-sm text-brand-soft-ink">
-                    <Sparkle size={16} weight="fill" aria-hidden="true" className="shrink-0" />
+                    <Sparkle size={16} weight="duotone" aria-hidden="true" className="shrink-0" />
                     <span className="nums">
                       New average cost will be{' '}
                       <strong className="font-semibold">{moneyPrecise(preview)}</strong>

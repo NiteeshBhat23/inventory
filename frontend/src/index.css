@@ -15,22 +15,31 @@
 --------------------------------------------------------------------------- */
 :root,
 [data-theme="light"] {
-  --canvas: #f5f7fa;
+  /* Signal Indigo — cool paper neutrals with a faint blue bias. */
+  --canvas: #f5f6fb;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --line: #e4e9f0;
-  --line-strong: #cbd5e1;
+  --surface-2: #edf0f8;
+  --line: #dfe3ef;
+  --line-strong: #c3c9dd;
 
-  --ink: #0f172a;
-  --ink-muted: #5a6b83;
-  --ink-subtle: #7c8ba1;
+  --ink: #171b26;
+  --ink-muted: #5b6479;
+  --ink-subtle: #7c86a0;
 
-  /* emerald-700 rather than -600: white-on-brand needs 4.5:1 for button labels */
-  --brand: #047857;
+  /* indigo-700: white-on-brand needs 4.5:1 for button labels */
+  --brand: #4338ca;
   --brand-ink: #ffffff;
-  --brand-text: #047857;
-  --brand-soft: #ecfdf5;
-  --brand-soft-ink: #065f46;
+  --brand-text: #4338ca;
+  --brand-soft: #e9e7fb;
+  --brand-soft-ink: #362ca6;
+
+  /* Green is reserved for profit and other positive money signals, kept
+     independent of --brand so the two never compete for the same colour. */
+  --good: #047857;
+  --good-ink: #ffffff;
+  --good-text: #047857;
+  --good-soft: #ecfdf5;
+  --good-soft-ink: #065f46;
 
   --danger: #dc2626;
   --danger-ink: #ffffff;
@@ -38,12 +47,12 @@
   --danger-soft: #fef2f2;
   --danger-soft-ink: #991b1b;
 
-  --warn: #d97706;
-  --warn-text: #b45309;
-  --warn-soft: #fffbeb;
-  --warn-soft-ink: #92400e;
+  --warn: #b45309;
+  --warn-text: #92400e;
+  --warn-soft: #fdf2e2;
+  --warn-soft-ink: #82400a;
 
-  --ring: #047857;
+  --ring: #4338ca;
   --scrim: rgb(15 23 42 / 0.45);
 
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
@@ -62,13 +71,21 @@
   --ink-muted: #9fb0c9;
   --ink-subtle: #74849c;
 
-  /* Bright fill + dark label: white-on-green can't reach 4.5:1 at any green
+  /* Bright fill + dark label: white-on-indigo can't reach 4.5:1 at any indigo
      light enough to read as "brand" against a dark canvas. */
-  --brand: #10b981;
-  --brand-ink: #04211a;
-  --brand-text: #34d399;
-  --brand-soft: #0d2b23;
-  --brand-soft-ink: #6ee7b7;
+  --brand: #818cf8;
+  --brand-ink: #1e1b4b;
+  --brand-text: #a5b4fc;
+  --brand-soft: #211e3d;
+  --brand-soft-ink: #c7d2fe;
+
+  /* Same emerald the old dark brand used — profit keeps its colour even
+     though brand identity has moved to indigo. */
+  --good: #10b981;
+  --good-ink: #04211a;
+  --good-text: #34d399;
+  --good-soft: #0d2b23;
+  --good-soft-ink: #6ee7b7;
 
   --danger: #ef4444;
   --danger-ink: #ffffff;
@@ -81,7 +98,7 @@
   --warn-soft: #2b2011;
   --warn-soft-ink: #fcd34d;
 
-  --ring: #34d399;
+  --ring: #a5b4fc;
   --scrim: rgb(2 6 16 / 0.65);
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
@@ -106,6 +123,12 @@
   --color-brand-text: var(--brand-text);
   --color-brand-soft: var(--brand-soft);
   --color-brand-soft-ink: var(--brand-soft-ink);
+
+  --color-good: var(--good);
+  --color-good-ink: var(--good-ink);
+  --color-good-text: var(--good-text);
+  --color-good-soft: var(--good-soft);
+  --color-good-soft-ink: var(--good-soft-ink);
 
   --color-danger: var(--danger);
   --color-danger-ink: var(--danger-ink);

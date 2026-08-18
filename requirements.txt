@@ -1,7 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
-pg8000==1.31.2
+psycopg2-binary==2.9.12
 pydantic==2.13.4
 pydantic-settings==2.15.0
 PyJWT[crypto]==2.9.0

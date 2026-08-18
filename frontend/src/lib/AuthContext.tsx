@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
-import { api, ApiError } from './apiClient'
+import { ApiError, setAuthToken } from './apiClient'
+import { fetchCached, invalidate, prefetch } from './useQuery'
 import type { Shop } from './types'
 
 interface AuthState {
@@ -26,7 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refreshShop() {
     try {
-      const s = await api.get<Shop>('/shops/me')
+      invalidate('/shops/me')
+      const s = await fetchCached<Shop>('/shops/me')
       setShop(s)
       setShopLoadError(null)
     } catch (err) {
@@ -49,14 +51,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
+      // Mirror the token before any request goes out, so the very first call
+      // takes the synchronous path instead of re-awaiting getSession().
+      setAuthToken(data.session)
       setSession(data.session)
-      if (data.session) await refreshShop()
+      if (data.session) {
+        // Boot used to be strictly serial: session -> /shops/me -> render ->
+        // /dashboard, three round trips deep before the first number appeared.
+        // The dashboard doesn't depend on the shop response, so start it now
+        // and let it land in the cache while /shops/me is still in flight —
+        // Dashboard then paints from cache on its first render.
+        prefetch('/dashboard?days=30')
+        await refreshShop()
+      }
       setLoading(false)
     })
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      setAuthToken(newSession)
       setSession(newSession)
-      if (newSession) await refreshShop()
-      else {
+      if (newSession) {
+        prefetch('/dashboard?days=30')
+        await refreshShop()
+      } else {
         setShop(null)
         setShopLoadError(null)
       }
@@ -66,6 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut()
+    setAuthToken(null)
+    // Never let one account's cached rows show up under the next login.
+    invalidate('/')
     setShop(null)
     setShopLoadError(null)
   }

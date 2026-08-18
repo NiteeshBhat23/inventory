@@ -26,7 +26,20 @@ bearer_scheme = HTTPBearer()
 def _jwk_client() -> PyJWKClient:
     settings = get_settings()
     jwks_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
-    return PyJWKClient(jwks_url, cache_keys=True)
+    return PyJWKClient(
+        jwks_url,
+        cache_keys=True,
+        # PyJWKClient defaults to lifespan=300, which means one unlucky request
+        # every five minutes pays a full ~1s JWKS refetch — a visible stall even
+        # with a single user. Signing keys rotate on the order of months, and
+        # the client already refetches immediately when a token references a
+        # `kid` it hasn't seen, which is the event that actually matters. So the
+        # timer is a slow safety net, not the rotation mechanism.
+        lifespan=12 * 60 * 60,
+        # Never let a slow/unreachable JWKS endpoint hold a request for the
+        # default 30s; failing fast surfaces a clean 401 instead.
+        timeout=5,
+    )
 
 
 def get_current_shop_id(

@@ -5,11 +5,12 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .. import models
+from ..deps import ShopContext
 from ..schemas import ItemMergeRequest, ItemOut, ItemUpdate
 from .cost_engine import compute_suggested_selling_price, is_below_cost
 
 
-def _to_item_out(item: models.Item, shop: models.Shop) -> ItemOut:
+def _to_item_out(item: models.Item, shop: ShopContext) -> ItemOut:
     margin_pct = item.target_margin_pct if item.target_margin_pct is not None else shop.default_target_margin_pct
     suggested = compute_suggested_selling_price(Decimal(item.avg_cost), Decimal(margin_pct)) if item.avg_cost else None
     threshold = item.low_stock_threshold if item.low_stock_threshold is not None else shop.default_low_stock_threshold
@@ -32,7 +33,7 @@ def _to_item_out(item: models.Item, shop: models.Shop) -> ItemOut:
     )
 
 
-def list_items(db: Session, shop: models.Shop, search: str | None, category: str | None) -> list[ItemOut]:
+def list_items(db: Session, shop: ShopContext, search: str | None, category: str | None) -> list[ItemOut]:
     q = db.query(models.Item).filter(models.Item.shop_id == shop.id, models.Item.is_archived.is_(False))
     if search:
         like = f"%{search}%"
@@ -43,7 +44,7 @@ def list_items(db: Session, shop: models.Shop, search: str | None, category: str
     return [_to_item_out(i, shop) for i in items]
 
 
-def get_item(db: Session, shop: models.Shop, item_id: uuid.UUID) -> models.Item | None:
+def get_item(db: Session, shop: ShopContext, item_id: uuid.UUID) -> models.Item | None:
     return (
         db.query(models.Item)
         .filter(models.Item.item_id == item_id, models.Item.shop_id == shop.id)
@@ -51,14 +52,14 @@ def get_item(db: Session, shop: models.Shop, item_id: uuid.UUID) -> models.Item 
     )
 
 
-def create_item(db: Session, shop: models.Shop, name: str, unit: str = "piece", category: str | None = None) -> models.Item:
+def create_item(db: Session, shop: ShopContext, name: str, unit: str = "piece", category: str | None = None) -> models.Item:
     item = models.Item(shop_id=shop.id, canonical_name=name, unit=unit, category=category)
     db.add(item)
     db.flush()
     return item
 
 
-def update_item(db: Session, shop: models.Shop, item_id: uuid.UUID, patch: ItemUpdate) -> models.Item | None:
+def update_item(db: Session, shop: ShopContext, item_id: uuid.UUID, patch: ItemUpdate) -> models.Item | None:
     item = get_item(db, shop, item_id)
     if not item:
         return None
@@ -68,7 +69,7 @@ def update_item(db: Session, shop: models.Shop, item_id: uuid.UUID, patch: ItemU
     return item
 
 
-def merge_items(db: Session, shop: models.Shop, req: ItemMergeRequest) -> models.Item | None:
+def merge_items(db: Session, shop: ShopContext, req: ItemMergeRequest) -> models.Item | None:
     """Merges source item into target: aliases the source name onto the target,
     re-points purchase/sale history, combines stock (weighted-average of the
     two avg costs), then archives the source item."""
@@ -96,5 +97,5 @@ def merge_items(db: Session, shop: models.Shop, req: ItemMergeRequest) -> models
     return target
 
 
-def to_item_out(item: models.Item, shop: models.Shop) -> ItemOut:
+def to_item_out(item: models.Item, shop: ShopContext) -> ItemOut:
     return _to_item_out(item, shop)

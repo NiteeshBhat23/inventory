@@ -1,14 +1,15 @@
 import csv
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
 from .. import models
+from ..deps import ShopContext
 
 
-def purchase_history_csv(db: Session, shop: models.Shop, days: int = 90) -> str:
-    since = datetime.utcnow() - timedelta(days=days)
+def purchase_history_csv(db: Session, shop: ShopContext, days: int = 90) -> str:
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (
         db.query(models.PurchaseHistory, models.Item.canonical_name)
         .join(models.Item, models.Item.item_id == models.PurchaseHistory.item_id)
@@ -24,8 +25,8 @@ def purchase_history_csv(db: Session, shop: models.Shop, days: int = 90) -> str:
     return buf.getvalue()
 
 
-def sale_history_csv(db: Session, shop: models.Shop, days: int = 90) -> str:
-    since = datetime.utcnow() - timedelta(days=days)
+def sale_history_csv(db: Session, shop: ShopContext, days: int = 90) -> str:
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (
         db.query(models.SaleRecord, models.Item.canonical_name)
         .join(models.Item, models.Item.item_id == models.SaleRecord.item_id)

@@ -21,7 +21,7 @@ function Brand() {
       <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-brand-ink">
         <Tag size={26} weight="fill" aria-hidden="true" />
       </span>
-      <h1 className="font-display text-2xl font-semibold text-ink">Shop Cost Tracker</h1>
+      <h1 className="font-display text-2xl font-semibold text-ink">ProfitPulse</h1>
       <p className="mt-1 text-sm text-ink-muted">
         Know what every part really costs you — and what to charge.
       </p>
@@ -120,7 +120,7 @@ export default function Login() {
           className="rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-card)]"
         >
           <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand-soft-ink">
-            <Storefront size={24} weight="fill" aria-hidden="true" />
+            <Storefront size={24} weight="duotone" aria-hidden="true" />
           </span>
           <h1 className="text-center font-display text-lg font-semibold text-ink">Name your shop</h1>
           <p className="mt-1 text-center text-sm text-ink-muted">

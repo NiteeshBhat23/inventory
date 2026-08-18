@@ -1,14 +1,16 @@
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import PurchaseBatchIn, PurchaseBatchResult, PurchaseLineResult
+from ..deps import ShopContext
+from ..schemas import PurchaseBatchIn, PurchaseBatchResult, PurchaseHistoryEntry, PurchaseLineResult
 from . import items as items_service
 from .cost_engine import InvalidPurchaseError, compute_new_avg_cost, derive_unit_price
 
 
-def commit_purchase_batch(db: Session, shop: models.Shop, batch: PurchaseBatchIn) -> PurchaseBatchResult:
+def commit_purchase_batch(db: Session, shop: ShopContext, batch: PurchaseBatchIn) -> PurchaseBatchResult:
     """Commits every line in one DB transaction — item + stock + history all
     update together or not at all (PRD Section 10 data-integrity requirement)."""
     results: list[PurchaseLineResult] = []
@@ -80,3 +82,39 @@ def commit_purchase_batch(db: Session, shop: models.Shop, batch: PurchaseBatchIn
         new_items_added=new_items,
         lines=results,
     )
+
+
+def list_purchase_history(
+    db: Session, shop: ShopContext, days: int = 90, supplier: str | None = None
+) -> list[PurchaseHistoryEntry]:
+    """Line-level purchase history, newest first, with item names resolved —
+    powers the "Spend by supplier" drill-down: every purchase underneath that
+    dashboard total, not just the rolled-up number."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    query = (
+        db.query(models.PurchaseHistory, models.Item.canonical_name)
+        .join(models.Item, models.Item.item_id == models.PurchaseHistory.item_id)
+        .filter(models.PurchaseHistory.shop_id == shop.id, models.PurchaseHistory.created_at >= since)
+    )
+    if supplier is not None:
+        # "Unknown supplier" on the dashboard stands in for a NULL supplier_name —
+        # match that case explicitly rather than an impossible string equality.
+        if supplier == "Unknown supplier":
+            query = query.filter(models.PurchaseHistory.supplier_name.is_(None))
+        else:
+            query = query.filter(models.PurchaseHistory.supplier_name == supplier)
+    rows = query.order_by(models.PurchaseHistory.created_at.desc()).all()
+    return [
+        PurchaseHistoryEntry(
+            purchase_id=p.purchase_id,
+            item_id=p.item_id,
+            item_name=item_name,
+            supplier_name=p.supplier_name,
+            quantity=p.quantity,
+            unit_price=p.unit_price,
+            total_price=p.total_price,
+            purchase_date=p.purchase_date,
+            created_at=p.created_at,
+        )
+        for p, item_name in rows
+    ]

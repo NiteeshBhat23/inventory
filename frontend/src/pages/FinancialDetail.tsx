@@ -1,7 +1,7 @@
 import { ChartLine, Tag } from '@phosphor-icons/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api } from '../lib/apiClient'
+import { useQuery } from '../lib/useQuery'
 import { money, moneyPrecise, qty, shortDate } from '../lib/format'
 import type { SaleHistoryEntry } from '../lib/types'
 import BackHeader from '../components/BackHeader'
@@ -42,24 +42,7 @@ export default function FinancialDetail() {
   const copy = COPY[activeMetric]
 
   const [days, setDays] = useState(30)
-  const [entries, setEntries] = useState<SaleHistoryEntry[] | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    api
-      .get<SaleHistoryEntry[]>(`/sales?days=${days}`)
-      .then((d) => {
-        if (!cancelled) setEntries(d)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [days])
+  const { data: entries, loading } = useQuery<SaleHistoryEntry[]>(`/sales?days=${days}`)
 
   const totals = useMemo(() => {
     if (!entries) return { revenue: 0, profit: 0, cost: 0, count: 0 }
@@ -98,7 +81,7 @@ export default function FinancialDetail() {
       {entries && entries.length === 0 && (
         <Card>
           <EmptyState
-            icon={<ChartLine size={24} weight="fill" />}
+            icon={<ChartLine size={24} weight="duotone" />}
             title="No sales in this period"
             description="Record a sale and it'll show up here with the full cost/revenue/profit breakdown."
           />
@@ -107,7 +90,7 @@ export default function FinancialDetail() {
 
       {entries && entries.length > 0 && (
         <>
-          <Card className={activeMetric === 'profit' ? 'border-brand/30 bg-brand-soft' : undefined}>
+          <Card className={activeMetric === 'profit' ? 'border-good/30 bg-good-soft' : undefined}>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
@@ -130,7 +113,7 @@ export default function FinancialDetail() {
                 <p
                   className={cn(
                     'nums mt-0.5 font-display text-lg font-semibold',
-                    totals.profit < 0 ? 'text-danger-text' : 'text-brand-text',
+                    totals.profit < 0 ? 'text-danger-text' : 'text-good-text',
                   )}
                 >
                   {money(totals.profit)}
@@ -167,9 +150,9 @@ export default function FinancialDetail() {
                       <span className="flex min-w-0 items-start gap-2.5">
                         <span
                           aria-hidden="true"
-                          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-soft-ink"
+                          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-good-soft text-good-soft-ink"
                         >
-                          <Tag size={15} weight="fill" />
+                          <Tag size={15} weight="duotone" />
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-medium text-ink">
@@ -188,7 +171,7 @@ export default function FinancialDetail() {
                         <span
                           className={cn(
                             'block text-xs font-medium',
-                            e.profit < 0 ? 'text-danger-text' : 'text-brand-text',
+                            e.profit < 0 ? 'text-danger-text' : 'text-good-text',
                           )}
                         >
                           {e.profit < 0 ? '−' : '+'}

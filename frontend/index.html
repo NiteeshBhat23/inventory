@@ -13,12 +13,29 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
 
-    <title>Shop Cost Tracker</title>
+    <!-- Warm the TLS connection to the API before the bundle has even parsed,
+         so the first dashboard request doesn't pay DNS + TCP + TLS itself. -->
+    <link rel="preconnect" href="%VITE_API_ORIGIN%" crossorigin />
+
+    <!-- Fonts load without blocking first paint: the browser fetches the
+         stylesheet as a non-blocking preload, then flips it to a real
+         stylesheet on load. `display=swap` means text is visible in the
+         fallback face throughout rather than invisible while fonts download. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+
+    <title>ProfitPulse</title>
 
     <!-- Resolve the theme before first paint. Without this, a dark-mode user
          sees a white flash while the JS bundle loads. -->

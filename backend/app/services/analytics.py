@@ -1,15 +1,24 @@
 """Dashboard aggregates. Per the System Design doc, this is Phase 1's new
-Analytics/Reporting service — read-heavy, cached in-process per shop by the
-router layer, invalidated on purchase/sale commit."""
+Analytics/Reporting service — read-heavy, cached in-process per shop, and
+invalidated on purchase/sale commit.
+
+Performance note: this used to issue six sequential round trips and pull every
+item, sale and purchase row into Python to aggregate them in a loop. Against a
+Supabase instance one region away that cost ~1s of pure latency on the app's
+landing page. It is now a single round trip: all six result sets are computed
+server-side in one statement and returned as one JSON document, so the cost is
+one network hop regardless of how much history the shop has accumulated.
+"""
 
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
-from sqlalchemy import func
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .. import models
+from ..deps import ShopContext
 from ..schemas import ActivityEntry, DashboardOut, KpiSummary, NamedValue, TrendPoint
 from .items import to_item_out
 
@@ -18,108 +27,203 @@ _CACHE_TTL_SECONDS = 30
 
 
 def invalidate_dashboard_cache(shop_id) -> None:
-    _CACHE.pop(str(shop_id), None)
+    """Drops every cached window (7/30/90 day) for this shop — a new purchase
+    or sale moves all of them, not just the one that happens to be on screen."""
+    prefix = f"{shop_id}:"
+    for key in [k for k in _CACHE if k.startswith(prefix)]:
+        _CACHE.pop(key, None)
 
 
-def build_dashboard(db: Session, shop: models.Shop, days: int = 30) -> DashboardOut:
+# One statement, one round trip. Numerics are cast to text so they survive the
+# JSON hop as exact decimal strings — going through a JSON float would quietly
+# introduce binary-float error into money arithmetic.
+_DASHBOARD_SQL = text(
+    """
+WITH live_items AS (
+    SELECT item_id, canonical_name, aliases, unit,
+           avg_cost::text          AS avg_cost,
+           stock_qty::text         AS stock_qty,
+           selling_price::text     AS selling_price,
+           target_margin_pct::text AS target_margin_pct,
+           category,
+           low_stock_threshold::text AS low_stock_threshold,
+           is_archived
+    FROM items
+    WHERE shop_id = :shop_id AND is_archived = false
+),
+sales_window AS (
+    SELECT item_id, quantity, sale_price, profit, sale_date
+    FROM sale_records
+    WHERE shop_id = :shop_id AND sale_date >= :since
+),
+purchases_window AS (
+    SELECT item_id, supplier_name, quantity, total_price, created_at
+    FROM purchase_history
+    WHERE shop_id = :shop_id AND created_at >= :since
+)
+SELECT json_build_object(
+    'items', (
+        SELECT COALESCE(json_agg(to_jsonb(i)), '[]'::json) FROM live_items i
+    ),
+    'totals', (
+        SELECT json_build_object(
+            'revenue', COALESCE(SUM(quantity * sale_price), 0)::text,
+            'profit',  COALESCE(SUM(profit), 0)::text
+        ) FROM sales_window
+    ),
+    'by_item', (
+        SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+            SELECT item_id,
+                   SUM(profit)::text   AS profit,
+                   SUM(quantity)::text AS volume
+            FROM sales_window GROUP BY item_id
+        ) x
+    ),
+    'by_supplier', (
+        SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+            SELECT supplier_name, SUM(total_price)::text AS total
+            FROM purchases_window GROUP BY supplier_name
+        ) x
+    ),
+    'purchase_days', (
+        SELECT COALESCE(json_agg(t.d ORDER BY t.d), '[]'::json) FROM (
+            SELECT DISTINCT created_at::date AS d FROM purchases_window
+        ) t
+    ),
+    'recent_sales', (
+        SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+            SELECT item_id,
+                   quantity::text               AS quantity,
+                   (quantity * sale_price)::text AS amount,
+                   sale_date                     AS ts
+            FROM sales_window ORDER BY sale_date DESC LIMIT 10
+        ) x
+    ),
+    'recent_purchases', (
+        SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+            SELECT item_id,
+                   quantity::text    AS quantity,
+                   total_price::text AS amount,
+                   created_at        AS ts
+            FROM purchases_window ORDER BY created_at DESC LIMIT 10
+        ) x
+    )
+) AS payload
+"""
+)
+
+
+def _dec(value) -> Decimal:
+    """Numerics arrive as exact decimal strings; NULL aggregates as None."""
+    return Decimal(value) if value is not None else Decimal(0)
+
+
+def _item_from_row(row: dict) -> SimpleNamespace:
+    """Adapts a JSON item row to the attribute access `to_item_out` expects, so
+    the ItemOut mapping stays defined in exactly one place."""
+    return SimpleNamespace(
+        item_id=row["item_id"],
+        canonical_name=row["canonical_name"],
+        aliases=row.get("aliases") or [],
+        unit=row["unit"],
+        avg_cost=_dec(row["avg_cost"]),
+        stock_qty=_dec(row["stock_qty"]),
+        selling_price=_dec(row["selling_price"]),
+        target_margin_pct=(
+            Decimal(row["target_margin_pct"]) if row["target_margin_pct"] is not None else None
+        ),
+        category=row["category"],
+        low_stock_threshold=(
+            Decimal(row["low_stock_threshold"]) if row["low_stock_threshold"] is not None else None
+        ),
+        is_archived=row["is_archived"],
+    )
+
+
+def build_dashboard(db: Session, shop: ShopContext, days: int = 30) -> DashboardOut:
     cache_key = f"{shop.id}:{days}"
     cached = _CACHE.get(cache_key)
     if cached and (time.time() - cached[0]) < _CACHE_TTL_SECONDS:
         return cached[1]
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    payload = db.execute(_DASHBOARD_SQL, {"shop_id": str(shop.id), "since": since}).scalar_one()
 
-    items = db.query(models.Item).filter(models.Item.shop_id == shop.id, models.Item.is_archived.is_(False)).all()
-    inventory_value = sum((Decimal(i.stock_qty) * Decimal(i.avg_cost) for i in items), Decimal(0))
-
-    sales = (
-        db.query(models.SaleRecord)
-        .filter(models.SaleRecord.shop_id == shop.id, models.SaleRecord.sale_date >= since)
-        .all()
-    )
-    revenue = sum((Decimal(s.quantity) * Decimal(s.sale_price) for s in sales), Decimal(0))
-    profit = sum((Decimal(s.profit) for s in sales), Decimal(0))
-
+    items = [_item_from_row(r) for r in payload["items"]]
     item_out_list = [to_item_out(i, shop) for i in items]
+    item_name_by_id = {str(i.item_id): i.canonical_name for i in items}
+
+    inventory_value = sum((i.stock_qty * i.avg_cost for i in items), Decimal(0))
     low_stock_items = [i for i in item_out_list if i.is_low_stock]
     below_cost_items = [i for i in item_out_list if i.is_below_cost]
 
-    # Inventory value trend: reconstruct running stock value at each purchase/sale
-    # event over the window, day-bucketed. Simple and good enough at Phase 1 volume.
-    events = []
-    purchases = (
-        db.query(models.PurchaseHistory)
-        .filter(models.PurchaseHistory.shop_id == shop.id, models.PurchaseHistory.created_at >= since)
-        .all()
-    )
-    for p in purchases:
-        events.append((p.created_at.date(), Decimal(p.quantity) * Decimal(p.avg_cost_after)))
-    trend_by_day: dict[date, Decimal] = {}
-    running = inventory_value
-    for d in sorted({e[0] for e in events}, reverse=True):
-        trend_by_day[d] = running
-    inventory_value_trend = sorted(
-        (TrendPoint(date=d, value=v) for d, v in trend_by_day.items()), key=lambda t: t.date
-    )
-    if not inventory_value_trend:
-        inventory_value_trend = [TrendPoint(date=datetime.utcnow().date(), value=inventory_value)]
-
-    item_name_by_id = {i.item_id: i.canonical_name for i in items}
-    profit_by_item: dict[str, Decimal] = {}
-    volume_by_item: dict[str, Decimal] = {}
-    for s in sales:
-        name = item_name_by_id.get(s.item_id, "Unknown")
-        profit_by_item[name] = profit_by_item.get(name, Decimal(0)) + Decimal(s.profit)
-        volume_by_item[name] = volume_by_item.get(name, Decimal(0)) + Decimal(s.quantity)
+    revenue = _dec(payload["totals"]["revenue"])
+    profit = _dec(payload["totals"]["profit"])
 
     top_items_by_profit = sorted(
-        (NamedValue(name=k, value=v) for k, v in profit_by_item.items()), key=lambda x: x.value, reverse=True
+        (
+            NamedValue(name=item_name_by_id.get(r["item_id"], "Unknown"), value=_dec(r["profit"]))
+            for r in payload["by_item"]
+        ),
+        key=lambda x: x.value,
+        reverse=True,
     )[:8]
     top_items_by_volume = sorted(
-        (NamedValue(name=k, value=v) for k, v in volume_by_item.items()), key=lambda x: x.value, reverse=True
+        (
+            NamedValue(name=item_name_by_id.get(r["item_id"], "Unknown"), value=_dec(r["volume"]))
+            for r in payload["by_item"]
+        ),
+        key=lambda x: x.value,
+        reverse=True,
     )[:8]
 
     category_value: dict[str, Decimal] = {}
     for i in items:
         cat = i.category or "Uncategorized"
-        category_value[cat] = category_value.get(cat, Decimal(0)) + Decimal(i.stock_qty) * Decimal(i.avg_cost)
+        category_value[cat] = category_value.get(cat, Decimal(0)) + i.stock_qty * i.avg_cost
     category_breakdown = sorted(
-        (NamedValue(name=k, value=v) for k, v in category_value.items()), key=lambda x: x.value, reverse=True
-    )
-
-    supplier_spend_rows = (
-        db.query(models.PurchaseHistory.supplier_name, func.sum(models.PurchaseHistory.total_price))
-        .filter(models.PurchaseHistory.shop_id == shop.id, models.PurchaseHistory.created_at >= since)
-        .group_by(models.PurchaseHistory.supplier_name)
-        .all()
-    )
-    supplier_spend = sorted(
-        (NamedValue(name=name or "Unknown supplier", value=Decimal(total)) for name, total in supplier_spend_rows),
+        (NamedValue(name=k, value=v) for k, v in category_value.items()),
         key=lambda x: x.value,
         reverse=True,
     )
 
-    activity: list[ActivityEntry] = []
-    for p in sorted(purchases, key=lambda x: x.created_at, reverse=True)[:10]:
-        activity.append(
-            ActivityEntry(
-                type="purchase",
-                item_name=item_name_by_id.get(p.item_id, "Unknown"),
-                quantity=p.quantity,
-                amount=p.total_price,
-                date=p.created_at,
-            )
+    supplier_spend = sorted(
+        (
+            NamedValue(name=r["supplier_name"] or "Unknown supplier", value=_dec(r["total"]))
+            for r in payload["by_supplier"]
+        ),
+        key=lambda x: x.value,
+        reverse=True,
+    )
+
+    # Inventory value at each day that saw a purchase in the window.
+    inventory_value_trend = [
+        TrendPoint(date=date.fromisoformat(d), value=inventory_value) for d in payload["purchase_days"]
+    ]
+    if not inventory_value_trend:
+        inventory_value_trend = [
+            TrendPoint(date=datetime.now(timezone.utc).date(), value=inventory_value)
+        ]
+
+    activity: list[ActivityEntry] = [
+        ActivityEntry(
+            type="purchase",
+            item_name=item_name_by_id.get(r["item_id"], "Unknown"),
+            quantity=_dec(r["quantity"]),
+            amount=_dec(r["amount"]),
+            date=r["ts"],
         )
-    for s in sorted(sales, key=lambda x: x.sale_date, reverse=True)[:10]:
-        activity.append(
-            ActivityEntry(
-                type="sale",
-                item_name=item_name_by_id.get(s.item_id, "Unknown"),
-                quantity=s.quantity,
-                amount=Decimal(s.quantity) * Decimal(s.sale_price),
-                date=s.sale_date,
-            )
+        for r in payload["recent_purchases"]
+    ] + [
+        ActivityEntry(
+            type="sale",
+            item_name=item_name_by_id.get(r["item_id"], "Unknown"),
+            quantity=_dec(r["quantity"]),
+            amount=_dec(r["amount"]),
+            date=r["ts"],
         )
+        for r in payload["recent_sales"]
+    ]
     activity.sort(key=lambda a: a.date, reverse=True)
     activity = activity[:15]
 

@@ -2,6 +2,7 @@ import { Archive, ClockCounterClockwise, PencilSimple } from '@phosphor-icons/re
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/apiClient'
+import { invalidate } from '../lib/useQuery'
 import { moneyPrecise, percent, qty, shortDate } from '../lib/format'
 import type { Item, PurchaseHistoryEntry } from '../lib/types'
 import AlertBanner from '../components/AlertBanner'
@@ -87,6 +88,7 @@ export default function ItemDetail() {
     setSaving(true)
     try {
       const updated = await api.patch<Item>(`/items/${item.item_id}`, body)
+      invalidate('/dashboard', '/items', '/sales', '/purchases')
       setItem(updated)
       toast.success(successMsg)
       return updated
@@ -132,6 +134,7 @@ export default function ItemDetail() {
     if (!ok) return
     try {
       await api.delete(`/items/${item.item_id}`)
+      invalidate('/dashboard', '/items', '/sales', '/purchases')
       toast.success(`${item.canonical_name} archived`)
       navigate('/inventory')
     } catch {
@@ -153,7 +156,7 @@ export default function ItemDetail() {
       <div className="space-y-4">
         <BackHeader title="Item not found" fallback="/inventory" />
         <EmptyState
-          icon={<Archive size={24} weight="fill" />}
+          icon={<Archive size={24} weight="duotone" />}
           title="This item isn't available"
           description="It may have been archived or removed."
         />
@@ -301,7 +304,7 @@ export default function ItemDetail() {
         {history.length === 0 ? (
           <EmptyState
             compact
-            icon={<ClockCounterClockwise size={22} weight="fill" />}
+            icon={<ClockCounterClockwise size={22} weight="duotone" />}
             title="No purchases yet"
             description="Each purchase you log will appear here with the price you paid."
           />

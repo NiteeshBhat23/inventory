@@ -1,6 +1,7 @@
 import { Desktop, Moon, SignOut, Sun } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { api, ApiError } from '../lib/apiClient'
+import { invalidate } from '../lib/useQuery'
 import { useAuth } from '../lib/AuthContext'
 import { useTheme, type ThemePref } from '../lib/ThemeContext'
 import BackHeader from '../components/BackHeader'
@@ -42,6 +43,9 @@ export default function Settings() {
         default_target_margin_pct: Number(margin),
         default_low_stock_threshold: Number(threshold),
       })
+      // Margin and low-stock defaults feed every derived item field, so the
+      // cached item lists and dashboard are stale the moment they change.
+      invalidate('/dashboard', '/items')
       await refreshShop()
       toast.success('Settings saved')
     } catch (err) {

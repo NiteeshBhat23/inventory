@@ -115,6 +115,23 @@ class PurchaseHistoryOut(BaseModel):
     created_at: datetime
 
 
+class PurchaseHistoryEntry(BaseModel):
+    """One line-level purchase record with the item name resolved — the
+    purchase-side counterpart to SaleHistoryEntry. Powers the "Spend by
+    supplier" drill-down: every purchase that rolled into a supplier's total,
+    not just the rolled-up number."""
+
+    purchase_id: uuid.UUID
+    item_id: uuid.UUID
+    item_name: str
+    supplier_name: str | None
+    quantity: float
+    unit_price: float
+    total_price: float
+    purchase_date: date
+    created_at: datetime
+
+
 # ---------- Sales ----------
 class SaleLineIn(BaseModel):
     item_id: uuid.UUID

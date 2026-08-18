@@ -2,6 +2,7 @@ import { ArrowRight, CheckCircle, Plus, Trash } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/apiClient'
+import { invalidate } from '../lib/useQuery'
 import { money, moneyPrecise, percent, qty } from '../lib/format'
 import type { Item, SaleBatchResult, SaleLineResult } from '../lib/types'
 import ItemTypeahead from '../components/ItemTypeahead'
@@ -88,6 +89,7 @@ export default function RecordSale() {
     setBusy(true)
     try {
       const res = await api.post<SaleBatchResult>('/sales', { lines: payloadLines })
+      invalidate('/dashboard', '/items', '/sales', '/purchases')
       setResult(res)
       toast.success(`Sale recorded — profit ${money(res.total_profit)}`)
     } catch (err) {
@@ -113,10 +115,10 @@ export default function RecordSale() {
       <div className="space-y-4">
         <BackHeader title="Sale recorded" fallback="/" />
 
-        <Card className="border-brand/30 bg-brand-soft">
+        <Card className="border-good/30 bg-good-soft">
           <div className="flex items-start gap-3">
-            <CheckCircle size={22} weight="fill" className="mt-0.5 shrink-0 text-brand-soft-ink" aria-hidden="true" />
-            <div className="min-w-0 flex-1 text-brand-soft-ink">
+            <CheckCircle size={22} weight="duotone" className="mt-0.5 shrink-0 text-good-soft-ink" aria-hidden="true" />
+            <div className="min-w-0 flex-1 text-good-soft-ink">
               <p className="text-sm font-semibold">{result.items_sold} item(s) sold</p>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
@@ -277,7 +279,7 @@ export default function RecordSale() {
                       <p
                         className={cn(
                           'nums text-sm font-semibold',
-                          lineProfit < 0 ? 'text-danger-text' : 'text-brand-text',
+                          lineProfit < 0 ? 'text-danger-text' : 'text-good-text',
                         )}
                       >
                         {money(lineProfit)}
@@ -338,7 +340,7 @@ export default function RecordSale() {
               <p
                 className={cn(
                   'nums font-display text-xl font-semibold',
-                  totals.profit < 0 ? 'text-danger-text' : 'text-brand-text',
+                  totals.profit < 0 ? 'text-danger-text' : 'text-good-text',
                 )}
               >
                 {money(totals.profit)}

@@ -1,4 +1,4 @@
-# Shop Cost Tracker — Phase 1 (Manual Core)
+# ProfitPulse — Phase 1 (Manual Core)
 
 A mobile-friendly web app for small vehicle/generator service centers to track purchase
 cost, stock, margin, and sales — **entirely manual entry, no AI** (see [`docs/`](docs/)

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..db import get_db
-from ..deps import get_current_shop
+from ..deps import ShopContext, get_current_shop
 from ..schemas import SaleBatchIn, SaleBatchResult, SaleHistoryEntry
 from ..services import sales as sales_service
 from ..services.analytics import invalidate_dashboard_cache
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/sales", tags=["sales"])
 @router.post("", response_model=SaleBatchResult)
 def commit_sale(
     body: SaleBatchIn,
-    shop: models.Shop = Depends(get_current_shop),
+    shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
     try:
@@ -31,7 +31,7 @@ def commit_sale(
 @router.get("", response_model=list[SaleHistoryEntry])
 def sale_history(
     days: int = 90,
-    shop: models.Shop = Depends(get_current_shop),
+    shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
     """Line-level sale history — powers the Profit/Revenue drill-down on the

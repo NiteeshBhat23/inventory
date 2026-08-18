@@ -1,6 +1,7 @@
 import { DownloadSimple, ChartBar } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../lib/apiClient'
+import { useQuery } from '../lib/useQuery'
 import { money } from '../lib/format'
 import type { DashboardData } from '../lib/types'
 import BackHeader from '../components/BackHeader'
@@ -25,25 +26,10 @@ function downloadCsv(filename: string, csv: string) {
 export default function Reports() {
   const toast = useToast()
   const [days, setDays] = useState(90)
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState<'purchases' | 'sales' | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    api
-      .get<DashboardData>(`/dashboard?days=${days}`)
-      .then((d) => {
-        if (!cancelled) setData(d)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [days])
+  // Same cached endpoint the dashboard uses — switching between the two pages
+  // at the same window is now a cache hit rather than a refetch.
+  const { data, loading } = useQuery<DashboardData>(`/dashboard?days=${days}`)
 
   async function exportCsv(kind: 'purchases' | 'sales') {
     setExporting(kind)
@@ -113,7 +99,7 @@ export default function Reports() {
       {data && !hasData && (
         <Card>
           <EmptyState
-            icon={<ChartBar size={24} weight="fill" />}
+            icon={<ChartBar size={24} weight="duotone" />}
             title="Nothing to report yet"
             description="Once you've logged some purchases and sales, this page will break down where your money is going."
           />
@@ -129,6 +115,7 @@ export default function Reports() {
             format={money}
             emptyLabel="No purchases in this period."
             limit={8}
+            linkFor={(d) => `/purchases/history?supplier=${encodeURIComponent(d.name)}`}
           />
           <RankedList
             title="Most profitable items"
@@ -137,6 +124,7 @@ export default function Reports() {
             format={money}
             emptyLabel="No sales in this period."
             limit={8}
+            linkFor={(d) => `/inventory?q=${encodeURIComponent(d.name)}`}
           />
           <RankedList
             title="Stock value by category"
@@ -145,6 +133,7 @@ export default function Reports() {
             format={money}
             emptyLabel="No items yet."
             limit={8}
+            linkFor={(d) => `/inventory?category=${encodeURIComponent(d.name)}`}
           />
         </>
       )}

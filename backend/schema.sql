@@ -64,6 +64,14 @@ create table if not exists sale_records (
 create index if not exists idx_sale_shop on sale_records(shop_id);
 create index if not exists idx_sale_item on sale_records(item_id);
 
+-- Composite indexes matching the app's actual filter+sort patterns (see
+-- migrations/001_performance_indexes.sql). Every hot query filters on
+-- shop_id AND a date, then sorts by that date.
+create index if not exists idx_sale_shop_date on sale_records (shop_id, sale_date desc);
+create index if not exists idx_purchase_shop_created on purchase_history (shop_id, created_at desc);
+create index if not exists idx_purchase_item_date on purchase_history (item_id, purchase_date desc);
+create index if not exists idx_items_shop_active_name on items (shop_id, canonical_name) where is_archived = false;
+
 -- Row-Level Security: every table scoped by shop_id === the authenticated user.
 alter table shops enable row level security;
 alter table items enable row level security;

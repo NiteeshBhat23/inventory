@@ -19,7 +19,7 @@ const ToastCtx = createContext<ToastApi | undefined>(undefined)
 
 const tones: Record<ToastTone, { cls: string; icon: ReactNode }> = {
   success: {
-    cls: 'bg-brand-soft text-brand-soft-ink border-brand/30',
+    cls: 'bg-good-soft text-good-soft-ink border-good/30',
     icon: <CheckCircle size={20} weight="fill" aria-hidden="true" />,
   },
   error: {

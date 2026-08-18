@@ -107,6 +107,18 @@ export interface NamedValue {
   value: number
 }
 
+export interface PurchaseHistoryEntry {
+  purchase_id: string
+  item_id: string
+  item_name: string
+  supplier_name: string | null
+  quantity: number
+  unit_price: number
+  total_price: number
+  purchase_date: string
+  created_at: string
+}
+
 export interface TrendPoint {
   date: string
   value: number

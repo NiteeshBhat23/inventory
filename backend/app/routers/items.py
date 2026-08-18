@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..db import get_db
-from ..deps import get_current_shop
+from ..deps import ShopContext, get_current_shop
 from ..schemas import ItemCreate, ItemMergeRequest, ItemOut, ItemUpdate, PurchaseHistoryOut
 from ..services import items as items_service
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/items", tags=["items"])
 def list_items(
     search: str | None = None,
     category: str | None = None,
-    shop: models.Shop = Depends(get_current_shop),
+    shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
     return items_service.list_items(db, shop, search, category)
@@ -25,7 +25,7 @@ def list_items(
 @router.post("", response_model=ItemOut, status_code=status.HTTP_201_CREATED)
 def create_item(
     body: ItemCreate,
-    shop: models.Shop = Depends(get_current_shop),
+    shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
     item = items_service.create_item(db, shop, body.canonical_name, body.unit, body.category)
@@ -39,7 +39,7 @@ def create_item(
 
 
 @router.get("/{item_id}", response_model=ItemOut)
-def get_item(item_id: uuid.UUID, shop: models.Shop = Depends(get_current_shop), db: Session = Depends(get_db)):
+def get_item(item_id: uuid.UUID, shop: ShopContext = Depends(get_current_shop), db: Session = Depends(get_db)):
     item = items_service.get_item(db, shop, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -50,7 +50,7 @@ def get_item(item_id: uuid.UUID, shop: models.Shop = Depends(get_current_shop), 
 def update_item(
     item_id: uuid.UUID,
     body: ItemUpdate,
-    shop: models.Shop = Depends(get_current_shop),
+    shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
     item = items_service.update_item(db, shop, item_id, body)
@@ -62,7 +62,7 @@ def update_item(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def archive_item(item_id: uuid.UUID, shop: models.Shop = Depends(get_current_shop), db: Session = Depends(get_db)):
+def archive_item(item_id: uuid.UUID, shop: ShopContext = Depends(get_current_shop), db: Session = Depends(get_db)):
     item = items_service.get_item(db, shop, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -71,7 +71,7 @@ def archive_item(item_id: uuid.UUID, shop: models.Shop = Depends(get_current_sho
 
 
 @router.post("/merge", response_model=ItemOut)
-def merge_items(body: ItemMergeRequest, shop: models.Shop = Depends(get_current_shop), db: Session = Depends(get_db)):
+def merge_items(body: ItemMergeRequest, shop: ShopContext = Depends(get_current_shop), db: Session = Depends(get_db)):
     target = items_service.merge_items(db, shop, body)
     if not target:
         raise HTTPException(status_code=404, detail="Source or target item not found")
@@ -84,7 +84,7 @@ def merge_items(body: ItemMergeRequest, shop: models.Shop = Depends(get_current_
 def item_purchase_history(
     item_id: uuid.UUID,
     supplier: str | None = None,
-    shop: models.Shop = Depends(get_current_shop),
+    shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
     q = db.query(models.PurchaseHistory).filter(

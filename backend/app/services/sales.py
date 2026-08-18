@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from .. import models
+from ..deps import ShopContext
 from ..schemas import SaleBatchIn, SaleBatchResult, SaleHistoryEntry, SaleLineResult
 from . import items as items_service
 from .cost_engine import evaluate_sale_line
@@ -20,7 +21,7 @@ class SaleBlockedError(Exception):
         super().__init__("Sale batch blocked")
 
 
-def commit_sale_batch(db: Session, shop: models.Shop, batch: SaleBatchIn) -> SaleBatchResult:
+def commit_sale_batch(db: Session, shop: ShopContext, batch: SaleBatchIn) -> SaleBatchResult:
     lines: list[SaleLineResult] = []
     any_blocked = False
 
@@ -116,11 +117,11 @@ def commit_sale_batch(db: Session, shop: models.Shop, batch: SaleBatchIn) -> Sal
     )
 
 
-def list_sale_history(db: Session, shop: models.Shop, days: int = 90) -> list[SaleHistoryEntry]:
+def list_sale_history(db: Session, shop: ShopContext, days: int = 90) -> list[SaleHistoryEntry]:
     """Line-level sale history, newest first, with item names resolved —
     powers the Profit/Revenue drill-down: every transaction underneath those
     dashboard totals, not just the rolled-up number."""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (
         db.query(models.SaleRecord, models.Item.canonical_name)
         .join(models.Item, models.Item.item_id == models.SaleRecord.item_id)

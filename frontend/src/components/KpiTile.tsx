@@ -13,7 +13,7 @@ const toneRing: Record<Tone, string> = {
 
 const toneIcon: Record<Tone, string> = {
   default: 'bg-surface-2 text-ink-muted',
-  good: 'bg-brand-soft text-brand-soft-ink',
+  good: 'bg-good-soft text-good-soft-ink',
   warn: 'bg-warn-soft text-warn-soft-ink',
   bad: 'bg-danger-soft text-danger-soft-ink',
 }

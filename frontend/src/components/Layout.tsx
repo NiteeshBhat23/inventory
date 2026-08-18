@@ -96,7 +96,7 @@ export default function Layout() {
               <Tag size={17} weight="fill" aria-hidden="true" />
             </span>
             <span className="truncate font-display text-[0.9375rem] font-semibold">
-              {shop?.name ?? 'Shop Cost Tracker'}
+              {shop?.name ?? 'ProfitPulse'}
             </span>
           </Link>
 
@@ -160,13 +160,13 @@ export default function Layout() {
       <Sheet open={actionsOpen} onClose={() => setActionsOpen(false)} title="What do you want to record?">
         <div className="space-y-2">
           <ActionRow
-            icon={<Receipt size={22} weight="fill" aria-hidden="true" />}
+            icon={<Receipt size={22} weight="duotone" aria-hidden="true" />}
             title="Add Purchase"
             description="Stock you bought from a supplier"
             onClick={() => go('/purchase/new')}
           />
           <ActionRow
-            icon={<Tag size={22} weight="fill" aria-hidden="true" />}
+            icon={<Tag size={22} weight="duotone" aria-hidden="true" />}
             title="Record Sale"
             description="Parts used or sold to a customer"
             onClick={() => go('/sale/new')}

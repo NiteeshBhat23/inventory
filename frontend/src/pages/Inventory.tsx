@@ -1,7 +1,7 @@
 import { CaretRight, MagnifyingGlass, Package, Plus, X } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api } from '../lib/apiClient'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useQuery } from '../lib/useQuery'
 import { moneyPrecise, percent, qty } from '../lib/format'
 import type { Item } from '../lib/types'
 import BackHeader from '../components/BackHeader'
@@ -35,36 +35,42 @@ function Badge({ tone, children }: { tone: 'warn' | 'bad'; children: React.React
 }
 
 export default function Inventory() {
-  const [items, setItems] = useState<Item[]>([])
-  const [search, setSearch] = useState('')
+  // Seeded from the URL so a link from the dashboard's "Top items by profit",
+  // "Most sold" or "Stock value by category" rows lands pre-filtered instead
+  // of on a blank list the owner has to re-filter by hand.
+  const [searchParams] = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [sort, setSort] = useState<SortKey>('name')
-  const [category, setCategory] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [category, setCategory] = useState<string | null>(searchParams.get('category'))
 
+  // The input updates on every keystroke, but the request only follows once
+  // typing settles — this used to fire one API call per character.
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    const q = search ? `?search=${encodeURIComponent(search)}` : ''
-    api
-      .get<Item[]>(`/items${q}`)
-      .then((d) => {
-        if (!cancelled) setItems(d)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+    const t = setTimeout(() => setDebouncedSearch(search), 220)
+    return () => clearTimeout(t)
   }, [search])
 
-  const categories = useMemo(
-    () => Array.from(new Set(items.map((i) => i.category).filter(Boolean) as string[])).sort(),
-    [items],
+  const { data, loading } = useQuery<Item[]>(
+    `/items${debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : ''}`,
   )
+  const items = useMemo(() => data ?? [], [data])
+
+  // "Uncategorized" is a display label, not a real value — items with no
+  // category store null, the same convention the dashboard's category
+  // breakdown uses. Surface it as a selectable chip so both a manual click
+  // and a deep link from "Stock value by category" land on the same items.
+  const categories = useMemo(() => {
+    const named = new Set(items.map((i) => i.category).filter(Boolean) as string[])
+    const list = Array.from(named).sort()
+    if (items.some((i) => !i.category)) list.push('Uncategorized')
+    return list
+  }, [items])
 
   const visible = useMemo(() => {
-    const filtered = category ? items.filter((i) => i.category === category) : items
+    const filtered = category
+      ? items.filter((i) => (category === 'Uncategorized' ? !i.category : i.category === category))
+      : items
     return [...filtered].sort((a, b) => {
       if (sort === 'name') return a.canonical_name.localeCompare(b.canonical_name)
       if (sort === 'stock') return b.stock_qty - a.stock_qty
@@ -170,7 +176,7 @@ export default function Inventory() {
 
       {!loading && visible.length === 0 && (
         <EmptyState
-          icon={<Package size={24} weight="fill" />}
+          icon={<Package size={24} weight="duotone" />}
           title={search ? 'No matching items' : 'No stock yet'}
           description={
             search
