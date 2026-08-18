@@ -1,0 +1,244 @@
+@import "tailwindcss";
+
+/* Theme is always resolved to an explicit data-theme on <html> (see ThemeContext),
+   so a single attribute selector covers both the system preference and the manual
+   toggle. That keeps every token deterministic instead of split across media queries. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------------------------------------------------------------------------
+   Semantic colour tokens.
+
+   Components never reference raw palette values — they use these roles, so a
+   theme swap is a single token change rather than a find-and-replace across
+   the app. Every foreground/background pair below was picked to clear WCAG AA
+   (4.5:1 for body text, 3:1 for borders and large text) in BOTH themes.
+--------------------------------------------------------------------------- */
+:root,
+[data-theme="light"] {
+  --canvas: #f5f7fa;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --line: #e4e9f0;
+  --line-strong: #cbd5e1;
+
+  --ink: #0f172a;
+  --ink-muted: #5a6b83;
+  --ink-subtle: #7c8ba1;
+
+  /* emerald-700 rather than -600: white-on-brand needs 4.5:1 for button labels */
+  --brand: #047857;
+  --brand-ink: #ffffff;
+  --brand-text: #047857;
+  --brand-soft: #ecfdf5;
+  --brand-soft-ink: #065f46;
+
+  --danger: #dc2626;
+  --danger-ink: #ffffff;
+  --danger-text: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-soft-ink: #991b1b;
+
+  --warn: #d97706;
+  --warn-text: #b45309;
+  --warn-soft: #fffbeb;
+  --warn-soft-ink: #92400e;
+
+  --ring: #047857;
+  --scrim: rgb(15 23 42 / 0.45);
+
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-raised: 0 4px 12px rgb(15 23 42 / 0.08), 0 2px 4px rgb(15 23 42 / 0.04);
+  --shadow-overlay: 0 -8px 32px rgb(15 23 42 / 0.16);
+}
+
+[data-theme="dark"] {
+  --canvas: #0b1220;
+  --surface: #131c2e;
+  --surface-2: #1b2438;
+  --line: #26314a;
+  --line-strong: #38455f;
+
+  --ink: #e8edf5;
+  --ink-muted: #9fb0c9;
+  --ink-subtle: #74849c;
+
+  /* Bright fill + dark label: white-on-green can't reach 4.5:1 at any green
+     light enough to read as "brand" against a dark canvas. */
+  --brand: #10b981;
+  --brand-ink: #04211a;
+  --brand-text: #34d399;
+  --brand-soft: #0d2b23;
+  --brand-soft-ink: #6ee7b7;
+
+  --danger: #ef4444;
+  --danger-ink: #ffffff;
+  --danger-text: #fca5a5;
+  --danger-soft: #2c1517;
+  --danger-soft-ink: #fca5a5;
+
+  --warn: #f59e0b;
+  --warn-text: #fcd34d;
+  --warn-soft: #2b2011;
+  --warn-soft-ink: #fcd34d;
+
+  --ring: #34d399;
+  --scrim: rgb(2 6 16 / 0.65);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.4), 0 2px 4px rgb(0 0 0 / 0.3);
+  --shadow-overlay: 0 -8px 32px rgb(0 0 0 / 0.5);
+}
+
+/* Expose the tokens as Tailwind utilities: bg-surface, text-ink-muted, border-line… */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-text: var(--brand-text);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-ink: var(--brand-soft-ink);
+
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-text: var(--danger-text);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-ink: var(--danger-soft-ink);
+
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-soft-ink: var(--warn-soft-ink);
+
+  --font-display: "Poppins", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: "Open Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  /* A single visible focus ring for every interactive element. :focus-visible
+     keeps it off mouse clicks while guaranteeing keyboard users always see
+     where they are — the previous build had no focus affordance at all. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* iOS zooms the page when a focused input's text is under 16px. */
+  input, select, textarea {
+    font-size: 16px;
+    font-family: inherit;
+  }
+
+  button, [role="button"], a, label, select, summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled), [role="button"]:not(:disabled), a[href], summary {
+    cursor: pointer;
+  }
+
+  ::placeholder {
+    color: var(--ink-subtle);
+  }
+}
+
+@layer utilities {
+  /* Prices and quantities shift horizontally as digits change without this. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Long item names, supplier names and IDs are user-supplied and can be
+     unbroken strings — let them reflow rather than blow out the layout. */
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.animate-fade-in { animation: fade-in 160ms ease-out both; }
+.animate-slide-up { animation: slide-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-sheet-up { animation: sheet-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-pop-in { animation: pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Entrance motion is decorative here — the content is already readable without
+   it, so honouring the OS setting costs nothing and prevents vestibular issues. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,24 @@
+# --- Backend (Python / FastAPI) ---
+backend/.venv/
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.pytest_cache/
+
+# --- Frontend (Vite / React) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# --- Claude Code local state ---
+# settings.local.json is a per-machine permission-approval cache, not project
+# config. skills/ is ~4.6MB of design-tooling data (icons, palettes, reference
+# docs) pulled in for UI work — not app code, so it doesn't belong in the repo
+# any more than node_modules does. launch.json stays tracked: it's just
+# portable dev-server config other contributors benefit from.
+.claude/settings.local.json
+.claude/skills/
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
