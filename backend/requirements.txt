@@ -2,8 +2,8 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
 pg8000==1.31.2
-pydantic==2.9.2
-pydantic-settings==2.5.2
+pydantic==2.13.4
+pydantic-settings==2.15.0
 PyJWT[crypto]==2.9.0
 python-multipart==0.0.9
 python-dotenv==1.0.1
