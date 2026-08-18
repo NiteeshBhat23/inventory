@@ -19,21 +19,25 @@ export default function BackHeader({ title, fallback = '/', subtitle, action }: 
     else navigate(fallback)
   }
 
+  // The button and the title sit in matching fixed-height boxes so both
+  // center on the same line by construction — no magic-number nudging
+  // (mt-0.5, pt-1, …) trying to eyeball two different font metrics into
+  // alignment. The subtitle lives outside that row, so it doesn't skew it.
   return (
     <div className="mb-4 flex items-start gap-1.5">
       <button
         type="button"
         onClick={goBack}
         aria-label="Go back"
-        className="-ml-2 mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:scale-95"
+        className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:scale-95"
       >
         <CaretLeft size={22} weight="bold" aria-hidden="true" />
       </button>
-      <div className="min-w-0 flex-1 pt-1">
-        <h1 className="truncate font-display text-xl font-semibold text-ink">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-muted">{subtitle}</p>}
+      <div className="min-w-0 flex-1">
+        <h1 className="flex h-11 items-center truncate font-display text-xl font-semibold text-ink">{title}</h1>
+        {subtitle && <p className="-mt-1 text-sm text-ink-muted">{subtitle}</p>}
       </div>
-      {action && <div className="shrink-0 pt-0.5">{action}</div>}
+      {action && <div className="flex h-11 shrink-0 items-center">{action}</div>}
     </div>
   )
 }

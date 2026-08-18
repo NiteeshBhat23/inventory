@@ -39,3 +39,15 @@ def purchase_history(
     drill-down on the dashboard/reports, where the owner wants to see every
     transaction behind a total, not just the rolled-up number."""
     return purchases_service.list_purchase_history(db, shop, days, supplier)
+
+
+@router.get("/suppliers", response_model=list[str])
+def list_suppliers(
+    search: str | None = None,
+    shop: ShopContext = Depends(get_current_shop),
+    db: Session = Depends(get_db),
+):
+    """Supplier names this shop has bought from before — powers the supplier
+    typeahead on Add Purchase (search-as-you-type, plus recently-used
+    suggestions before the owner types anything)."""
+    return purchases_service.list_suppliers(db, shop, search)

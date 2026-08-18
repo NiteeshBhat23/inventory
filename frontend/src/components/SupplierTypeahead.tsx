@@ -1,18 +1,14 @@
 import { ClockCounterClockwise, MagnifyingGlass, PlusCircle } from '@phosphor-icons/react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../lib/apiClient'
-import { moneyPrecise, qty } from '../lib/format'
 import { getRecents, pushRecent } from '../lib/recents'
-import type { Item } from '../lib/types'
 import { FieldShell, controlBase, controlTone } from './ui/Field'
 import { cn } from '../lib/cn'
 
 interface Props {
   label: string
   value: string
-  onChangeText: (text: string) => void
-  onSelectExisting: (item: Item) => void
-  onCreateNew?: (name: string) => void
+  onChange: (name: string) => void
   placeholder?: string
   hint?: string
   error?: string
@@ -20,30 +16,16 @@ interface Props {
 
 const RECENT_LIMIT = 3
 
-/** Item picker with search-as-you-type.
- *
- *  Implements the combobox keyboard contract (arrows to move, Enter to pick,
- *  Escape to close) because this is the single most-used control in the app —
- *  previously it was mouse-only, so a keyboard user could see suggestions but
- *  never select one.
- *
- *  Before the owner types anything, it shows their last few picks instead of
- *  an empty box — re-buying/re-selling the same handful of parts is the
- *  common case, and it still never dumps the whole catalog on screen. */
-export default function ItemTypeahead({
-  label,
-  value,
-  onChangeText,
-  onSelectExisting,
-  onCreateNew,
-  placeholder,
-  hint,
-  error,
-}: Props) {
+/** Supplier name picker — search-as-you-type over suppliers you've actually
+ *  bought from before, plus your last few before you've typed anything, with
+ *  "Use <name>" always available since a supplier isn't a record with an id,
+ *  just a name on a purchase. Same combobox contract as ItemTypeahead
+ *  (arrows, Enter, Escape) and the same "never dump the whole list" rule. */
+export default function SupplierTypeahead({ label, value, onChange, placeholder, hint, error }: Props) {
   const id = useId()
   const listId = `${id}-list`
-  const [results, setResults] = useState<Item[]>([])
-  const [recents, setRecents] = useState<Item[]>([])
+  const [results, setResults] = useState<string[]>([])
+  const [recents, setRecents] = useState<string[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [active, setActive] = useState(0)
@@ -52,33 +34,16 @@ export default function ItemTypeahead({
   const query = value.trim()
   const showingRecents = query.length === 0
   const options = showingRecents ? recents : results
-  const canCreate = !!onCreateNew && query.length > 0
-  // The "create new" row is a selectable option too, so it sits at the end of
-  // the same index space the arrow keys walk.
-  const optionCount = options.length + (canCreate ? 1 : 0)
+  // "Use <what's typed>" is always offered once there's text — a supplier is
+  // just a name, so there's no separate create step the way items have one.
+  const exactMatch = options.some((o) => o.toLowerCase() === query.toLowerCase())
+  const canUseTyped = query.length > 0 && !exactMatch
+  const optionCount = options.length + (canUseTyped ? 1 : 0)
 
-  // Recently-picked items, resolved to fresh data (stock/cost may have moved
-  // since) whenever the box opens with nothing typed yet.
   useEffect(() => {
     if (!open || !showingRecents) return
-    const ids = getRecents('items').slice(0, RECENT_LIMIT)
-    if (ids.length === 0) {
-      setRecents([])
-      return
-    }
-    let cancelled = false
-    Promise.all(
-      ids.map((itemId) =>
-        api.get<Item>(`/items/${itemId}`).catch(() => null),
-      ),
-    ).then((fetched) => {
-      if (cancelled) return
-      setRecents(fetched.filter((i): i is Item => i !== null))
-      setActive(0)
-    })
-    return () => {
-      cancelled = true
-    }
+    setRecents(getRecents('suppliers').slice(0, RECENT_LIMIT))
+    setActive(0)
   }, [open, showingRecents])
 
   useEffect(() => {
@@ -89,11 +54,10 @@ export default function ItemTypeahead({
     }
     setLoading(true)
     if (timer.current) clearTimeout(timer.current)
-    // Debounced so a fast typist doesn't fire a request per keystroke.
     timer.current = setTimeout(async () => {
       try {
-        const items = await api.get<Item[]>(`/items?search=${encodeURIComponent(query)}`)
-        setResults(items)
+        const names = await api.get<string[]>(`/purchases/suppliers?search=${encodeURIComponent(query)}`)
+        setResults(names)
         setActive(0)
       } catch {
         setResults([])
@@ -106,15 +70,15 @@ export default function ItemTypeahead({
     }
   }, [query])
 
-  function selectItem(item: Item) {
-    pushRecent('items', item.item_id)
-    onSelectExisting(item)
+  function pick(name: string) {
+    pushRecent('suppliers', name)
+    onChange(name)
+    setOpen(false)
   }
 
   function choose(index: number) {
-    if (index < options.length) selectItem(options[index])
-    else if (canCreate) onCreateNew!(query)
-    setOpen(false)
+    if (index < options.length) pick(options[index])
+    else if (canUseTyped) pick(query)
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -153,14 +117,13 @@ export default function ItemTypeahead({
           aria-invalid={error ? true : undefined}
           autoComplete="off"
           className={cn(controlBase, controlTone(!!error), 'pl-9')}
-          placeholder={placeholder ?? 'Search…'}
+          placeholder={placeholder ?? 'Search or add a supplier'}
           value={value}
           onChange={(e) => {
-            onChangeText(e.target.value)
+            onChange(e.target.value)
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
-          // Delayed so a click on an option lands before the list unmounts.
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={onKeyDown}
         />
@@ -169,7 +132,7 @@ export default function ItemTypeahead({
           <ul
             id={listId}
             role="listbox"
-            aria-label={showingRecents ? 'Recently used items' : 'Matching items'}
+            aria-label={showingRecents ? 'Recently used suppliers' : 'Matching suppliers'}
             className="animate-fade-in absolute z-20 mt-1.5 max-h-64 w-full overflow-auto rounded-xl border border-line bg-surface py-1 shadow-[var(--shadow-raised)]"
           >
             {showingRecents && options.length > 0 && (
@@ -183,34 +146,23 @@ export default function ItemTypeahead({
               <li className="px-3.5 py-3 text-sm text-ink-muted">Searching…</li>
             )}
 
-            {options.map((item, i) => (
-              <li key={item.item_id} id={`${id}-opt-${i}`} role="option" aria-selected={i === active}>
+            {options.map((name, i) => (
+              <li key={name} id={`${id}-opt-${i}`} role="option" aria-selected={i === active}>
                 <button
                   type="button"
                   onMouseDown={() => choose(i)}
                   onMouseEnter={() => setActive(i)}
                   className={cn(
-                    'flex w-full min-h-12 items-center justify-between gap-3 px-3.5 py-2 text-left transition-colors',
+                    'flex w-full min-h-12 items-center px-3.5 py-2 text-left text-sm font-medium text-ink transition-colors',
                     i === active ? 'bg-surface-2' : 'bg-transparent',
                   )}
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-ink">
-                      {item.canonical_name}
-                    </span>
-                    <span className="block text-xs text-ink-muted">per {item.unit}</span>
-                  </span>
-                  <span className="nums shrink-0 text-right text-xs text-ink-muted">
-                    <span className="block">
-                      {qty(item.stock_qty)} {item.unit}
-                    </span>
-                    <span className="block">{moneyPrecise(item.avg_cost)}</span>
-                  </span>
+                  <span className="truncate">{name}</span>
                 </button>
               </li>
             ))}
 
-            {canCreate && (
+            {canUseTyped && (
               <li
                 id={`${id}-opt-${options.length}`}
                 role="option"
@@ -227,13 +179,13 @@ export default function ItemTypeahead({
                   )}
                 >
                   <PlusCircle size={18} weight="fill" aria-hidden="true" />
-                  <span className="truncate">Create "{query}"</span>
+                  <span className="truncate">Use "{query}"</span>
                 </button>
               </li>
             )}
 
-            {!loading && !showingRecents && results.length === 0 && !canCreate && (
-              <li className="px-3.5 py-3 text-sm text-ink-muted">No matching items</li>
+            {!loading && !showingRecents && results.length === 0 && !canUseTyped && (
+              <li className="px-3.5 py-3 text-sm text-ink-muted">No matching suppliers</li>
             )}
           </ul>
         )}

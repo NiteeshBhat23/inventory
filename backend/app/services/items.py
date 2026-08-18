@@ -50,7 +50,9 @@ def _to_item_out(item: models.Item, shop: ShopContext) -> ItemOut:
     # item selling at a 50% margin still displayed "20% margin".
     selling_price = Decimal(item.selling_price)
     avg_cost = Decimal(item.avg_cost)
-    actual_margin_pct = float((selling_price - avg_cost) / selling_price * 100) if selling_price > 0 else None
+    # Margin = profit relative to what it cost you, not to what it sold for.
+    # Buy at 150, sell at 300 → 150 profit on a 150 cost = 100% margin.
+    actual_margin_pct = float((selling_price - avg_cost) / avg_cost * 100) if avg_cost > 0 else None
 
     threshold = item.low_stock_threshold if item.low_stock_threshold is not None else shop.default_low_stock_threshold
     return ItemOut(

@@ -18,10 +18,19 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function Brand() {
   return (
-    <div className="mb-6 text-center">
-      <Logo size={52} className="mx-auto mb-3 block" />
-      <h1 className="font-display text-2xl font-semibold text-ink">ProfitPulse</h1>
-      <p className="mt-1 text-sm text-ink-muted">
+    <div className="mb-8 flex flex-col items-center text-center">
+      {/* Mark and wordmark sit on one line as a single lockup — stacking
+          them separately read as three unrelated lines instead of one
+          brand block. */}
+      <div className="mb-3 flex items-center gap-2.5">
+        <Logo size={34} />
+        <span className="font-display text-2xl font-semibold tracking-tight text-ink">
+          ProfitPulse
+        </span>
+      </div>
+      {/* text-balance keeps the wrap even (no long line + a lonely orphan
+          word), and the width cap keeps it from stretching to one line. */}
+      <p className="max-w-[280px] text-balance text-sm leading-relaxed text-ink-muted">
         Know what every part really costs you — and what to charge.
       </p>
     </div>

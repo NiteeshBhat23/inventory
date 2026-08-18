@@ -34,13 +34,12 @@ function Badge({ tone, children }: { tone: 'warn' | 'bad'; children: React.React
 }
 
 export default function Inventory() {
-  // Seeded from the URL so a link from the dashboard's "Top items by profit",
-  // "Most sold" or "Stock value by category" rows lands pre-filtered instead
-  // of on a blank list the owner has to re-filter by hand.
+  // Seeded from the URL so a link from the dashboard's "Top items by profit"
+  // or "Most sold" rows lands pre-filtered instead of on a blank list the
+  // owner has to re-filter by hand.
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [sort, setSort] = useState<SortKey>('name')
-  const [category, setCategory] = useState<string | null>(searchParams.get('category'))
 
   // The input updates on every keystroke, but the request only follows once
   // typing settles — this used to fire one API call per character.
@@ -55,27 +54,13 @@ export default function Inventory() {
   )
   const items = useMemo(() => data ?? [], [data])
 
-  // "Uncategorized" is a display label, not a real value — items with no
-  // category store null, the same convention the dashboard's category
-  // breakdown uses. Surface it as a selectable chip so both a manual click
-  // and a deep link from "Stock value by category" land on the same items.
-  const categories = useMemo(() => {
-    const named = new Set(items.map((i) => i.category).filter(Boolean) as string[])
-    const list = Array.from(named).sort()
-    if (items.some((i) => !i.category)) list.push('Uncategorized')
-    return list
-  }, [items])
-
   const visible = useMemo(() => {
-    const filtered = category
-      ? items.filter((i) => (category === 'Uncategorized' ? !i.category : i.category === category))
-      : items
-    return [...filtered].sort((a, b) => {
+    return [...items].sort((a, b) => {
       if (sort === 'name') return a.canonical_name.localeCompare(b.canonical_name)
       if (sort === 'stock') return b.stock_qty - a.stock_qty
       return b.avg_cost - a.avg_cost
     })
-  }, [items, category, sort])
+  }, [items, sort])
 
   return (
     <div className="space-y-4">
@@ -117,40 +102,6 @@ export default function Inventory() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {categories.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setCategory(null)}
-              aria-pressed={category === null}
-              className={cn(
-                'min-h-11 rounded-full border px-4 text-xs font-semibold transition-colors',
-                category === null
-                  ? 'border-brand bg-brand text-brand-ink'
-                  : 'border-line-strong bg-surface text-ink-muted hover:text-ink',
-              )}
-            >
-              All
-            </button>
-          )}
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCategory(category === c ? null : c)}
-              aria-pressed={category === c}
-              className={cn(
-                'min-h-11 rounded-full border px-4 text-xs font-semibold transition-colors',
-                category === c
-                  ? 'border-brand bg-brand text-brand-ink'
-                  : 'border-line-strong bg-surface text-ink-muted hover:text-ink',
-              )}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
         <div className="ml-auto flex items-center gap-1.5">
           <label htmlFor="inv-sort" className="text-xs font-medium text-ink-muted">
             Sort
@@ -206,7 +157,7 @@ export default function Inventory() {
                     {item.is_low_stock && <Badge tone="warn">Low</Badge>}
                   </div>
                   <p className="nums mt-0.5 text-xs text-ink-muted">
-                    {item.category ?? 'Uncategorized'} · {qty(item.stock_qty)} {item.unit} in stock
+                    {qty(item.stock_qty)} {item.unit} in stock
                   </p>
                 </div>
 

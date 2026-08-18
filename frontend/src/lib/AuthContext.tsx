@@ -9,6 +9,12 @@ interface AuthState {
   session: Session | null
   shop: Shop | null
   loading: boolean
+  // True while a shop lookup is in flight — distinct from `loading`, which
+  // only covers the very first boot. Without this, a fresh interactive login
+  // renders one frame with session set but shop still null, which reads
+  // exactly like "no shop yet" and briefly shows the create-shop form to
+  // existing owners before their real shop arrives.
+  shopLoading: boolean
   // Set only when the shop lookup itself failed (network/server error) — as
   // opposed to a confirmed "you have no shop yet" (404), which just leaves
   // shopLoadError null and shop null so the create-shop form shows normally.
@@ -23,9 +29,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [shop, setShop] = useState<Shop | null>(null)
   const [shopLoadError, setShopLoadError] = useState<string | null>(null)
+  const [shopLoading, setShopLoading] = useState(true)
   const [loading, setLoading] = useState(true)
 
   async function refreshShop() {
+    setShopLoading(true)
     try {
       invalidate('/shops/me')
       const s = await fetchCached<Shop>('/shops/me')
@@ -46,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             : 'Could not reach the server. Check that the backend is running and try again.',
         )
       }
+    } finally {
+      setShopLoading(false)
     }
   }
 
@@ -63,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Dashboard then paints from cache on its first render.
         prefetch('/dashboard?days=30')
         await refreshShop()
+      } else {
+        setShopLoading(false)
       }
       setLoading(false)
     })
@@ -75,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setShop(null)
         setShopLoadError(null)
+        setShopLoading(false)
       }
     })
     return () => sub.subscription.unsubscribe()
@@ -87,10 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     invalidate('/')
     setShop(null)
     setShopLoadError(null)
+    setShopLoading(false)
   }
 
   return (
-    <AuthCtx.Provider value={{ session, shop, loading, shopLoadError, refreshShop, signOut }}>
+    <AuthCtx.Provider value={{ session, shop, loading, shopLoading, shopLoadError, refreshShop, signOut }}>
       {children}
     </AuthCtx.Provider>
   )

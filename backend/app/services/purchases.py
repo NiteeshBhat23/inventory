@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -122,3 +123,26 @@ def list_purchase_history(
         )
         for p, item_name in rows
     ]
+
+
+def list_suppliers(db: Session, shop: ShopContext, search: str | None, limit: int = 20) -> list[str]:
+    """Distinct supplier names this shop has actually bought from, most
+    recently-used first — backs the supplier typeahead (search-as-you-type
+    plus "recently used" before the owner has typed anything), the same
+    pattern as the item picker. Never lists every supplier at once."""
+    q = (
+        db.query(
+            models.PurchaseHistory.supplier_name,
+            func.max(models.PurchaseHistory.created_at).label("last_used"),
+        )
+        .filter(
+            models.PurchaseHistory.shop_id == shop.id,
+            models.PurchaseHistory.supplier_name.isnot(None),
+            models.PurchaseHistory.supplier_name != "",
+        )
+        .group_by(models.PurchaseHistory.supplier_name)
+    )
+    if search:
+        q = q.filter(models.PurchaseHistory.supplier_name.ilike(f"%{search}%"))
+    rows = q.order_by(func.max(models.PurchaseHistory.created_at).desc()).limit(limit).all()
+    return [r.supplier_name for r in rows]

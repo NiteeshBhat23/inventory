@@ -142,22 +142,13 @@ export default function Dashboard() {
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <RankedList
-                  title="Stock value by category"
-                  data={data.category_breakdown}
-                  format={money}
-                  emptyLabel="No items yet."
-                  linkFor={(d) => `/inventory?category=${encodeURIComponent(d.name)}`}
-                />
-                <RankedList
-                  title="Spend by supplier"
-                  data={data.supplier_spend}
-                  format={money}
-                  emptyLabel="No purchases in this period."
-                  linkFor={(d) => `/purchases/history?supplier=${encodeURIComponent(d.name)}`}
-                />
-              </div>
+              <RankedList
+                title="Spend by supplier"
+                data={data.supplier_spend}
+                format={money}
+                emptyLabel="No purchases in this period."
+                linkFor={(d) => `/purchases/history?supplier=${encodeURIComponent(d.name)}`}
+              />
 
               <Card>
                 <CardHeader

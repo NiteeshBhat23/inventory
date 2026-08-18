@@ -56,9 +56,12 @@ export default function ItemDetail() {
   const [priceInput, setPriceInput] = useState('')
   const [editingThreshold, setEditingThreshold] = useState(false)
   const [thresholdInput, setThresholdInput] = useState('')
+  const [editingMargin, setEditingMargin] = useState(false)
+  const [marginInput, setMarginInput] = useState('')
   const [saving, setSaving] = useState(false)
 
   const shopDefault = shop?.default_low_stock_threshold ?? 5
+  const shopDefaultMargin = shop?.default_target_margin_pct ?? 20
 
   useEffect(() => {
     if (!itemId) return
@@ -73,6 +76,7 @@ export default function ItemDetail() {
         setItem(i)
         setPriceInput(String(i.selling_price))
         setThresholdInput(String(i.low_stock_threshold ?? shopDefault))
+        setMarginInput(String(i.target_margin_pct ?? shopDefaultMargin))
         setHistory(h)
       })
       .finally(() => {
@@ -81,7 +85,7 @@ export default function ItemDetail() {
     return () => {
       cancelled = true
     }
-  }, [itemId, shopDefault])
+  }, [itemId, shopDefault, shopDefaultMargin])
 
   async function patch(body: Record<string, unknown>, successMsg: string) {
     if (!item) return
@@ -119,6 +123,25 @@ export default function ItemDetail() {
     if (updated) {
       setThresholdInput(String(shopDefault))
       setEditingThreshold(false)
+    }
+  }
+
+  async function saveMargin() {
+    const updated = await patch(
+      { target_margin_pct: Number(marginInput) },
+      'Target margin updated',
+    )
+    if (updated) setEditingMargin(false)
+  }
+
+  async function resetMargin() {
+    // Same convention as the low-stock threshold: explicit null clears the
+    // per-item override so this item follows the shop's default target
+    // margin again, which is also what the low-margin alert falls back to.
+    const updated = await patch({ target_margin_pct: null }, 'Using shop default again')
+    if (updated) {
+      setMarginInput(String(shopDefaultMargin))
+      setEditingMargin(false)
     }
   }
 
@@ -166,14 +189,12 @@ export default function ItemDetail() {
 
   const threshold = item.low_stock_threshold ?? shopDefault
   const usingDefault = item.low_stock_threshold == null
+  const targetMargin = item.target_margin_pct ?? shopDefaultMargin
+  const usingDefaultMargin = item.target_margin_pct == null
 
   return (
     <div className="space-y-4">
-      <BackHeader
-        title={item.canonical_name}
-        subtitle={`${item.category ?? 'Uncategorized'} · per ${item.unit}`}
-        fallback="/inventory"
-      />
+      <BackHeader title={item.canonical_name} subtitle={`per ${item.unit}`} fallback="/inventory" />
 
       <Card>
         <div className="grid grid-cols-2 gap-4">
@@ -296,6 +317,54 @@ export default function ItemDetail() {
           <p className="nums font-display text-lg font-semibold text-ink">
             {qty(threshold)} {item.unit}
           </p>
+        )}
+      </Card>
+
+      {/* This is what the Insights "low margin" alert compares this item's
+          real selling margin against — without a per-item value here, every
+          item was silently judged against the shop default instead. */}
+      <Card>
+        <CardHeader
+          title="Target margin"
+          subtitle={
+            usingDefaultMargin
+              ? `Using the shop default of ${percent(shopDefaultMargin)}`
+              : `Custom for this item`
+          }
+          action={
+            !editingMargin ? (
+              <Button size="sm" variant="secondary" onClick={() => setEditingMargin(true)}>
+                Change
+              </Button>
+            ) : undefined
+          }
+        />
+
+        {editingMargin ? (
+          <div className="space-y-3">
+            <NumberField
+              label="Target margin (%)"
+              autoFocus
+              value={marginInput}
+              onChange={(e) => setMarginInput(e.target.value)}
+              hint="Used for low-margin alerts, and to suggest a price on future purchases."
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setEditingMargin(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" loading={saving} onClick={saveMargin}>
+                Save
+              </Button>
+              {!usingDefaultMargin && (
+                <Button size="sm" variant="ghost" onClick={resetMargin}>
+                  Use shop default
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="nums font-display text-lg font-semibold text-ink">{percent(targetMargin)}</p>
         )}
       </Card>
 

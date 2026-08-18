@@ -156,6 +156,9 @@ def build_insights(db: Session, shop: ShopContext, days: int = 30) -> InsightsOu
         profit = _dec(r["total_profit"])
         if units <= 0:
             continue
+        # Margin = profit relative to cost (revenue - profit), not to revenue —
+        # matches the per-item margin shown on the Inventory list.
+        cost = revenue - profit
         profit_leaderboard.append(
             ProfitLeaderboardRow(
                 item_id=r["item_id"],
@@ -164,7 +167,7 @@ def build_insights(db: Session, shop: ShopContext, days: int = 30) -> InsightsOu
                 revenue=revenue,
                 total_profit=profit,
                 profit_per_unit=(profit / units) if units else Decimal(0),
-                margin_pct=float(profit / revenue * 100) if revenue > 0 else 0.0,
+                margin_pct=float(profit / cost * 100) if cost > 0 else 0.0,
             )
         )
     profit_leaderboard.sort(key=lambda r: r.total_profit, reverse=True)
@@ -246,9 +249,10 @@ def build_insights(db: Session, shop: ShopContext, days: int = 30) -> InsightsOu
     for item in items_by_id.values():
         selling_price = _dec(item["selling_price"])
         avg_cost = _dec(item["avg_cost"])
-        if selling_price <= 0:
+        if selling_price <= 0 or avg_cost <= 0:
             continue
-        actual_margin = float((selling_price - avg_cost) / selling_price * 100)
+        # Margin = profit relative to cost, not to selling price.
+        actual_margin = float((selling_price - avg_cost) / avg_cost * 100)
         target_margin = float(item["target_margin_pct"]) if item["target_margin_pct"] else float(shop.default_target_margin_pct)
         if actual_margin < target_margin:
             low_margin.append(

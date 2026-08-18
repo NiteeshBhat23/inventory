@@ -44,8 +44,12 @@ function RouteFallback() {
 }
 
 function Gate({ children }: { children: React.ReactNode }) {
-  const { session, shop, loading } = useAuth()
+  const { session, shop, loading, shopLoading } = useAuth()
   if (loading) return <BootScreen />
+  // A fresh login sets `session` before the shop lookup resolves — without
+  // this, that one frame looks identical to "no shop yet" and flashes the
+  // create-shop form at an owner who already has one.
+  if (session && shopLoading) return <BootScreen />
   if (!session || !shop) return <Login />
   return <>{children}</>
 }

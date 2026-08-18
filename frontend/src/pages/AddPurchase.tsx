@@ -7,8 +7,10 @@ import { moneyPrecise, qty } from '../lib/format'
 import { previewNewAvgCost } from '../lib/costPreview'
 import type { Item, PurchaseBatchResult } from '../lib/types'
 import ItemTypeahead from '../components/ItemTypeahead'
+import SupplierTypeahead from '../components/SupplierTypeahead'
 import BackHeader from '../components/BackHeader'
 import AlertBanner from '../components/AlertBanner'
+import { pushRecent } from '../lib/recents'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { NumberField, TextField } from '../components/ui/Field'
 import { Card } from '../components/ui/Card'
@@ -93,6 +95,8 @@ export default function AddPurchase() {
           : { new_item_name: l.newName, quantity: q, unit_price: unit },
       )
     }
+
+    if (supplier.trim()) pushRecent('suppliers', supplier.trim())
 
     setBusy(true)
     try {
@@ -192,13 +196,12 @@ export default function AddPurchase() {
 
       <Card>
         <div className="grid gap-3 sm:grid-cols-2">
-          <TextField
+          <SupplierTypeahead
             label="Supplier"
             hint="Optional — helps you compare prices later"
-            placeholder="e.g. Sharma Auto Parts"
-            autoComplete="organization"
+            placeholder="Search or add a supplier"
             value={supplier}
-            onChange={(e) => setSupplier(e.target.value)}
+            onChange={setSupplier}
           />
           <TextField
             label="Purchase date"

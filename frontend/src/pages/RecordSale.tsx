@@ -172,7 +172,9 @@ export default function RecordSale() {
           const price = Number(l.salePrice) || 0
           const cost = l.selected ? Number(l.selected.avg_cost) : 0
           const lineProfit = (price - cost) * q
-          const marginPct = price > 0 ? ((price - cost) / price) * 100 : 0
+          // Margin = profit relative to cost, not to price — buy at 150, sell
+          // at 300, that's 150 profit on a 150 cost, a 100% margin.
+          const marginPct = cost > 0 ? ((price - cost) / cost) * 100 : 0
           const belowCost = !!l.selected && price > 0 && price < cost
           const needsOverride = belowCost && !l.override
           const stock = l.selected ? Number(l.selected.stock_qty) : 0
