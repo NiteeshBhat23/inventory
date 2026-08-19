@@ -2,6 +2,8 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -83,6 +85,10 @@ class PurchaseBatchIn(BaseModel):
     supplier_name: str | None = None
     purchase_date: date
     lines: list[PurchaseLineIn]
+    # 'manual' | 'upload' — records how the entry originated so the accuracy
+    # of scanned bills can be measured against typed ones (PRD success
+    # metrics). Defaults to manual so existing clients are unaffected.
+    source: Literal["manual", "upload"] = "manual"
 
 
 class PurchaseLineResult(BaseModel):
@@ -142,6 +148,9 @@ class SaleLineIn(BaseModel):
 
 class SaleBatchIn(BaseModel):
     lines: list[SaleLineIn]
+    customer_name: str | None = None
+    invoice_ref: str | None = None
+    source: Literal["manual", "upload"] = "manual"
 
 
 class SaleLineResult(BaseModel):
@@ -193,6 +202,71 @@ class SaleHistoryEntry(BaseModel):
     profit: float
     sold_below_cost: bool
     sale_date: datetime
+
+
+# ---------- Bill scanning (Phase 2) ----------
+# Two layers on purpose:
+#   *Extracted* models are the raw shape we ask Gemini for. Every field is
+#   optional, because the whole point is that the model returns null rather
+#   than guessing, and the confirmation UI flags those as "needs your input".
+#   *Out* models are what the frontend receives — the extracted data plus the
+#   catalog match we resolved for each line.
+
+
+class ExtractedLine(BaseModel):
+    """One line item as read off the bill, before any matching."""
+
+    item_name: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    total_price: float | None = None
+
+
+class ExtractedBill(BaseModel):
+    """Raw model output. Purchase bills fill supplier_name; sales invoices
+    fill customer_name/invoice_ref. One shared shape keeps the vision call,
+    retry and parsing logic identical for both bill types (PRD Section 9)."""
+
+    supplier_name: str | None = None
+    customer_name: str | None = None
+    invoice_ref: str | None = None
+    bill_date: date | None = None
+    line_items: list[ExtractedLine] = []
+
+
+class MatchedLine(BaseModel):
+    """An extracted line with the shop's catalog consulted.
+
+    match_confidence is the fuzzy-similarity score (0-1) behind the suggested
+    item. The UI shows a low-confidence match as a suggestion the owner must
+    confirm, so a wrong guess is always visible and correctable before it
+    reaches the cost engine."""
+
+    item_name: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    total_price: float | None = None
+    matched_item_id: uuid.UUID | None = None
+    matched_item_name: str | None = None
+    match_confidence: float | None = None
+
+
+class BillExtractionOut(BaseModel):
+    """What POST /bills/extract returns.
+
+    `warnings` carries non-fatal problems the owner should see (a line with no
+    readable price, a date we couldn't parse). A partially-read bill is still
+    useful — it beats typing the whole thing — so these never fail the request."""
+
+    bill_type: str  # 'purchase' | 'sale'
+    supplier_name: str | None = None
+    customer_name: str | None = None
+    invoice_ref: str | None = None
+    bill_date: date | None = None
+    lines: list[MatchedLine] = []
+    warnings: list[str] = []
 
 
 # ---------- Dashboard / Analytics ----------

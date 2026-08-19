@@ -36,8 +36,12 @@ async function resolveToken(): Promise<string | null> {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await resolveToken()
+  // A FormData body must NOT carry an explicit Content-Type: the browser has
+  // to set it itself so it can append the multipart boundary. Setting it here
+  // produces a body the server cannot parse.
+  const isFormData = options.body instanceof FormData
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -79,4 +83,17 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body !== undefined ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  /** Multipart upload with a hard time budget.
+   *
+   *  A vision call is the one request in this app that legitimately takes
+   *  several seconds, and the model provider retries internally before giving
+   *  up — so without an explicit ceiling a bad day looks like a spinner that
+   *  never resolves. The abort turns that into an error the user can act on. */
+  upload: <T>(path: string, form: FormData, timeoutMs = 60_000) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    return request<T>(path, { method: 'POST', body: form, signal: controller.signal }).finally(() =>
+      clearTimeout(timer),
+    )
+  },
 }

@@ -61,7 +61,7 @@ def commit_purchase_batch(db: Session, shop: ShopContext, batch: PurchaseBatchIn
                 total_price=total_price,
                 purchase_date=batch.purchase_date,
                 avg_cost_after=cost_result.new_avg_cost,
-                source="manual",
+                source=batch.source,
             )
             db.add(history)
 

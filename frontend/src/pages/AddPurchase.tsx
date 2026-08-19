@@ -5,10 +5,11 @@ import { api, ApiError } from '../lib/apiClient'
 import { invalidate } from '../lib/useQuery'
 import { moneyPrecise, qty } from '../lib/format'
 import { previewNewAvgCost } from '../lib/costPreview'
-import type { Item, PurchaseBatchResult } from '../lib/types'
+import type { BillExtraction, Item, PurchaseBatchResult } from '../lib/types'
 import ItemTypeahead from '../components/ItemTypeahead'
 import SupplierTypeahead from '../components/SupplierTypeahead'
 import BackHeader from '../components/BackHeader'
+import BillScanner from '../components/BillScanner'
 import AlertBanner from '../components/AlertBanner'
 import { pushRecent } from '../lib/recents'
 import { Button, ButtonLink } from '../components/ui/Button'
@@ -60,9 +61,67 @@ export default function AddPurchase() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<PurchaseBatchResult | null>(null)
+  // Non-fatal notes from the scanner ("row 3 had no price"). Kept separate
+  // from `error`, which means the save itself failed.
+  const [scanNotes, setScanNotes] = useState<string[]>([])
+  // Records that this batch came from a photo, so the committed rows are
+  // tagged source='upload' and scan accuracy can be measured later.
+  const [fromScan, setFromScan] = useState(false)
 
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  }
+
+  /** Confidence above which we pre-select the catalog match outright rather
+   *  than just naming it. Kept in sync with the server's STRONG_MATCH so the
+   *  UI's idea of "confident" matches the one the matcher actually used —
+   *  see backend/app/services/matching.py. */
+  const STRONG_MATCH = 0.82
+
+  /** Turns an extracted bill into editable form rows.
+   *
+   *  Everything lands in the normal form as ordinary editable state — there is
+   *  no separate "review" screen, because the manual form already is the
+   *  review UI and the owner is going to check these numbers either way.
+   *
+   *  A confidently-matched row is pre-selected against the existing catalog
+   *  item (fetched in full, since the cost-preview needs its stock/avg_cost);
+   *  a weaker or absent match becomes a plain typeahead pre-filled with the
+   *  bill's own wording, so the owner picks rather than the machine guessing
+   *  wrong and silently merging two different parts. */
+  async function applyExtraction(bill: BillExtraction) {
+    if (bill.supplier_name) setSupplier(bill.supplier_name)
+    if (bill.bill_date) setDate(bill.bill_date)
+
+    const resolved = await Promise.all(
+      bill.lines.map(async (l): Promise<Line> => {
+        const confident = l.matched_item_id !== null && (l.match_confidence ?? 0) >= STRONG_MATCH
+        const selected = confident ? await api.get<Item>(`/items/${l.matched_item_id}`).catch(() => null) : null
+
+        return {
+          key: crypto.randomUUID(),
+          query: l.item_name ?? '',
+          selected,
+          isNew: false,
+          newName: l.item_name ?? '',
+          // A price or quantity the model couldn't read stays empty rather
+          // than becoming 0, forcing the owner to supply it instead of
+          // silently saving a wrong number.
+          quantity: l.quantity !== null ? String(l.quantity) : '',
+          price:
+            l.unit_price !== null ? String(l.unit_price) : l.total_price !== null ? String(l.total_price) : '',
+          priceMode: l.unit_price !== null || l.total_price === null ? 'unit' : 'total',
+        }
+      }),
+    )
+
+    setLines(resolved.length > 0 ? resolved : [newLine()])
+    setScanNotes(bill.warnings)
+    setFromScan(true)
+    setError(null)
+    if (resolved.length > 0) {
+      toast.success(`Read ${resolved.length} item(s) — check them before saving`)
+    }
   }
 
   function removeLine(key: string) {
@@ -104,6 +163,7 @@ export default function AddPurchase() {
         supplier_name: supplier.trim() || null,
         purchase_date: date,
         lines: payloadLines,
+        source: fromScan ? 'upload' : 'manual',
       })
       invalidate('/dashboard', '/insights', '/items', '/sales', '/purchases')
       setResult(res)
@@ -178,6 +238,8 @@ export default function AddPurchase() {
               setResult(null)
               setLines([newLine()])
               setSupplier('')
+              setScanNotes([])
+              setFromScan(false)
             }}
           >
             Add another
@@ -193,6 +255,23 @@ export default function AddPurchase() {
   return (
     <div className="space-y-4">
       <BackHeader title="Add Purchase" subtitle="Stock you bought from a supplier" fallback="/" />
+
+      <BillScanner
+        billType="purchase"
+        onExtracted={(bill) => {
+          void applyExtraction(bill)
+        }}
+      />
+
+      {scanNotes.length > 0 && (
+        <AlertBanner tone="warn">
+          <ul className="space-y-0.5">
+            {scanNotes.map((note, i) => (
+              <li key={i}>{note}</li>
+            ))}
+          </ul>
+        </AlertBanner>
+      )}
 
       <Card>
         <div className="grid gap-3 sm:grid-cols-2">

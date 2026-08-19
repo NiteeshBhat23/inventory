@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/apiClient'
 import { invalidate } from '../lib/useQuery'
 import { money, moneyPrecise, percent, qty } from '../lib/format'
-import type { Item, SaleBatchResult, SaleLineResult } from '../lib/types'
+import type { BillExtraction, Item, SaleBatchResult, SaleLineResult } from '../lib/types'
 import ItemTypeahead from '../components/ItemTypeahead'
 import BackHeader from '../components/BackHeader'
+import BillScanner from '../components/BillScanner'
 import AlertBanner from '../components/AlertBanner'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { NumberField } from '../components/ui/Field'
@@ -35,9 +36,57 @@ export default function RecordSale() {
   const [busy, setBusy] = useState(false)
   const [blocked, setBlocked] = useState<SaleLineResult[]>([])
   const [result, setResult] = useState<SaleBatchResult | null>(null)
+  const [scanNotes, setScanNotes] = useState<string[]>([])
+  const [fromScan, setFromScan] = useState(false)
+  const [customerName, setCustomerName] = useState<string | null>(null)
+  const [invoiceRef, setInvoiceRef] = useState<string | null>(null)
 
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  }
+
+  /** Confidence above which a catalog match is pre-selected outright — kept in
+   *  sync with the server's STRONG_MATCH (backend/app/services/matching.py). */
+  const STRONG_MATCH = 0.82
+
+  /** Turns a scanned invoice into editable rows, the same way AddPurchase
+   *  does — see the comment there for why there's no separate review screen.
+   *
+   *  One difference from purchases: a sale can only use items already in
+   *  stock, so a row with no confident match is left unselected with the
+   *  invoice's own wording in the search box, rather than offered as a new
+   *  item to create. The owner picks the real catalog item themselves. */
+  async function applyExtraction(bill: BillExtraction) {
+    setCustomerName(bill.customer_name)
+    setInvoiceRef(bill.invoice_ref)
+
+    const resolved = await Promise.all(
+      bill.lines.map(async (l): Promise<Line> => {
+        const confident = l.matched_item_id !== null && (l.match_confidence ?? 0) >= STRONG_MATCH
+        const selected = confident ? await api.get<Item>(`/items/${l.matched_item_id}`).catch(() => null) : null
+        const price = l.unit_price ?? (l.total_price !== null && l.quantity ? l.total_price / l.quantity : null)
+
+        return {
+          key: crypto.randomUUID(),
+          query: l.item_name ?? '',
+          selected,
+          quantity: l.quantity !== null ? String(l.quantity) : '',
+          // The price actually charged on the invoice takes priority over the
+          // item's current catalog selling_price — they can legitimately
+          // differ, and the invoice is the source of truth for what happened.
+          salePrice: price !== null ? String(price) : selected ? String(selected.selling_price || '') : '',
+          override: false,
+        }
+      }),
+    )
+
+    setLines(resolved.length > 0 ? resolved : [newLine()])
+    setScanNotes(bill.warnings)
+    setFromScan(true)
+    setError(null)
+    if (resolved.length > 0) {
+      toast.success(`Read ${resolved.length} item(s) — check them before saving`)
+    }
   }
 
   function removeLine(key: string) {
@@ -88,7 +137,12 @@ export default function RecordSale() {
 
     setBusy(true)
     try {
-      const res = await api.post<SaleBatchResult>('/sales', { lines: payloadLines })
+      const res = await api.post<SaleBatchResult>('/sales', {
+        lines: payloadLines,
+        customer_name: customerName,
+        invoice_ref: invoiceRef,
+        source: fromScan ? 'upload' : 'manual',
+      })
       invalidate('/dashboard', '/insights', '/items', '/sales', '/purchases')
       setResult(res)
       toast.success(`Sale recorded — profit ${money(res.total_profit)}`)
@@ -149,6 +203,10 @@ export default function RecordSale() {
             onClick={() => {
               setResult(null)
               setLines([newLine()])
+              setScanNotes([])
+              setFromScan(false)
+              setCustomerName(null)
+              setInvoiceRef(null)
             }}
           >
             Record another
@@ -164,6 +222,23 @@ export default function RecordSale() {
   return (
     <div className="space-y-4">
       <BackHeader title="Record Sale" subtitle="Parts used or sold to a customer" fallback="/" />
+
+      <BillScanner
+        billType="sale"
+        onExtracted={(bill) => {
+          void applyExtraction(bill)
+        }}
+      />
+
+      {scanNotes.length > 0 && (
+        <AlertBanner tone="warn">
+          <ul className="space-y-0.5">
+            {scanNotes.map((note, i) => (
+              <li key={i}>{note}</li>
+            ))}
+          </ul>
+        </AlertBanner>
+      )}
 
       <div className="space-y-3">
         {lines.map((l, idx) => {

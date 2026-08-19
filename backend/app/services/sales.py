@@ -96,8 +96,10 @@ def commit_sale_batch(db: Session, shop: ShopContext, batch: SaleBatchIn) -> Sal
                     sale_price=line.sale_price,
                     cost_at_sale=result_line.cost_at_sale,
                     profit=result_line.profit,
-                    source="manual",
+                    source=batch.source,
                     sold_below_cost=result_line.sold_below_cost,
+                    customer_name=batch.customer_name,
+                    invoice_ref=batch.invoice_ref,
                 )
             )
         db.commit()

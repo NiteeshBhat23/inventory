@@ -102,6 +102,33 @@ export interface SaleHistoryEntry {
   sale_date: string
 }
 
+// ---------- Bill scanning (Phase 2) ----------
+
+/** One row read off a bill, with the catalog match the server resolved.
+ *  Every value is nullable because the model returns null rather than
+ *  guessing — the form flags those as needing input instead of defaulting
+ *  them to zero. */
+export interface MatchedLine {
+  item_name: string | null
+  quantity: number | null
+  unit: string | null
+  unit_price: number | null
+  total_price: number | null
+  matched_item_id: string | null
+  matched_item_name: string | null
+  match_confidence: number | null
+}
+
+export interface BillExtraction {
+  bill_type: 'purchase' | 'sale'
+  supplier_name: string | null
+  customer_name: string | null
+  invoice_ref: string | null
+  bill_date: string | null
+  lines: MatchedLine[]
+  warnings: string[]
+}
+
 export interface NamedValue {
   name: string
   value: number
