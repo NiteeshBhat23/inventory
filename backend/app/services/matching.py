@@ -135,6 +135,8 @@ def match_lines(db: Session, shop: ShopContext, lines: list[ExtractedLine]) -> l
                 unit=line.unit,
                 unit_price=line.unit_price,
                 total_price=line.total_price,
+                gst_pct=line.gst_pct,
+                price_includes_gst=line.price_includes_gst,
                 matched_item_id=item.item_id if item else None,
                 matched_item_name=item.canonical_name if item else None,
                 match_confidence=round(score, 3) if item else None,

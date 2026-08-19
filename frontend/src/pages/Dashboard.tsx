@@ -16,7 +16,6 @@ import { money, qty, relativeDate } from '../lib/format'
 import { PERIODS } from '../lib/periods'
 import type { DashboardData } from '../lib/types'
 import KpiTile from '../components/KpiTile'
-import AlertBanner from '../components/AlertBanner'
 import { Card, CardHeader, CardList, CardListRow } from '../components/ui/Card'
 import { RankedList } from '../components/ui/RankedList'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -99,16 +98,6 @@ export default function Dashboard() {
               to="/inventory"
             />
           </div>
-
-          {data.low_stock_items.length > 0 && (
-            <AlertBanner tone="warn">
-              <strong className="font-semibold">{data.low_stock_items.length} item(s)</strong> have
-              run low.{' '}
-              <Link to="/purchase/new" className="font-semibold underline underline-offset-2">
-                Restock now
-              </Link>
-            </AlertBanner>
-          )}
 
           {!hasActivity ? (
             <Card>

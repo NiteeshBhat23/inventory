@@ -26,6 +26,7 @@ create table if not exists items (
   category text,
   low_stock_threshold numeric,
   is_archived boolean not null default false,
+  wont_restock boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

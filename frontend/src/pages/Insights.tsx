@@ -375,7 +375,63 @@ function PriceHistorySection() {
       )}
 
       {item && !loading && data && data.points.length > 0 && (
-        <div className="mt-4">
+        <PriceHistoryBody points={data.points} />
+      )}
+    </Card>
+  )
+}
+
+/** Split out so the "is there actually a trend to show" decision has its own
+ *  home. A chart with one cost dot and one selling-price dot on different
+ *  dates — which is what a brand-new item always looks like — has no line to
+ *  draw and told the owner nothing (that was the entire original complaint:
+ *  "I don't get any insights from this"). A snapshot row answers the
+ *  question that chart was trying to ask ("what am I paying vs. charging
+ *  right now") in one line, every time, regardless of how much history
+ *  exists — the chart itself only adds value once there's a real trend to
+ *  plot, so it's held back until then instead of rendering two lonely dots. */
+function PriceHistoryBody({ points }: { points: PriceHistoryData['points'] }) {
+  const costPoints = points.filter((p) => p.kind === 'cost')
+  const sellingPoints = points.filter((p) => p.kind === 'selling')
+  // Points arrive sorted by date from the API, so the last of each kind is
+  // the current value.
+  const latestCost = costPoints.at(-1)?.value ?? null
+  const latestSelling = sellingPoints.at(-1)?.value ?? null
+  const marginPct = latestCost && latestSelling ? ((latestSelling - latestCost) / latestCost) * 100 : null
+  // A trend needs at least two points in the SAME series — one cost dot and
+  // one selling dot never form a line between them, they're unrelated series.
+  const hasTrend = costPoints.length >= 2 || sellingPoints.length >= 2
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-center">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Cost</p>
+          <p className="nums text-sm font-semibold text-ink">
+            {latestCost !== null ? moneyPrecise(latestCost) : '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Selling price</p>
+          <p className="nums text-sm font-semibold text-ink">
+            {latestSelling !== null ? moneyPrecise(latestSelling) : '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Margin</p>
+          <p
+            className={cn(
+              'nums text-sm font-semibold',
+              marginPct !== null && marginPct < 0 ? 'text-danger-text' : 'text-ink',
+            )}
+          >
+            {marginPct !== null ? percent(marginPct) : '—'}
+          </p>
+        </div>
+      </div>
+
+      {hasTrend ? (
+        <div>
           <div className="mb-2 flex items-center gap-4 text-xs font-medium text-ink-muted">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-brand" aria-hidden="true" /> Cost
@@ -385,11 +441,15 @@ function PriceHistorySection() {
             </span>
           </div>
           <Suspense fallback={<div className="h-56 animate-pulse rounded-xl bg-surface-2" />}>
-            <PriceHistoryChart points={data.points} />
+            <PriceHistoryChart points={points} />
           </Suspense>
         </div>
+      ) : (
+        <p className="text-center text-xs text-ink-muted">
+          A trend chart appears once there's a second purchase or price change to compare against.
+        </p>
       )}
-    </Card>
+    </div>
   )
 }
 

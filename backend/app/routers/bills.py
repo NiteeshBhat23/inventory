@@ -46,6 +46,12 @@ def _build_warnings(result: BillExtractionOut) -> list[str]:
             warnings.append(f"{label}: couldn't read the quantity.")
         if line.unit_price is None and line.total_price is None:
             warnings.append(f"{label}: couldn't read a price.")
+        elif line.gst_pct is None and line.price_includes_gst is None:
+            # A price with no tax information either way — used exactly as
+            # printed, which may or may not already include GST. Flagged
+            # rather than assumed, since assuming wrong in either direction
+            # silently mis-states the shop's real cost.
+            warnings.append(f"{label}: couldn't tell if this price includes GST — check it.")
 
     if result.bill_date is None:
         warnings.append("Couldn't read the date — defaulted to today.")
@@ -106,6 +112,7 @@ async def extract(
         invoice_ref=extracted.invoice_ref if bill_type == "sale" else None,
         bill_date=extracted.bill_date,
         lines=matching.match_lines(db, shop, extracted.line_items),
+        misc_charges=extracted.misc_charges,
     )
     result.warnings = _build_warnings(result)
     return result

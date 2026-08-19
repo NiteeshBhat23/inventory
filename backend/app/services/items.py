@@ -1,13 +1,31 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .. import models
 from ..deps import ShopContext
 from ..schemas import ItemMergeRequest, ItemOut, ItemUpdate
 from .cost_engine import compute_suggested_selling_price, is_below_cost
+
+
+class DuplicateItemNameError(ValueError):
+    """Raised when a rename would exactly collide (after normalization) with
+    another active item in the same shop."""
+
+
+def normalize_item_name(name: str) -> str:
+    """Case/whitespace-normalizes an item name so "Spark Plug", " spark plug ",
+    and "SPARK  PLUG" are all the same catalog entry rather than three rows
+    silently forking the same part's cost/stock history.
+
+    Applied at every write path (manual create/rename, purchase-batch
+    new-item creation, bill-scan matches that become new items) so the rule
+    lives in exactly one place. Uppercases and collapses ALL whitespace runs
+    (not just leading/trailing) — a stray double space in the middle of a
+    name is the same failure mode as a leading one."""
+    return " ".join(name.split()).upper()
 
 
 def log_price_change(
@@ -67,10 +85,14 @@ def _to_item_out(item: models.Item, shop: ShopContext) -> ItemOut:
         category=item.category,
         low_stock_threshold=item.low_stock_threshold,
         is_archived=item.is_archived,
+        wont_restock=item.wont_restock,
         suggested_selling_price=suggested,
         margin_pct=actual_margin_pct,
         is_below_cost=bool(item.selling_price) and is_below_cost(selling_price, avg_cost),
-        is_low_stock=Decimal(item.stock_qty) <= Decimal(threshold),
+        # An item the owner has explicitly said they won't reorder never
+        # shows as low stock, no matter how far below the threshold it sits —
+        # that flag exists specifically to silence this alert.
+        is_low_stock=(not item.wont_restock) and Decimal(item.stock_qty) <= Decimal(threshold),
     )
 
 
@@ -93,11 +115,48 @@ def get_item(db: Session, shop: ShopContext, item_id: uuid.UUID) -> models.Item 
     )
 
 
+def find_item_by_name(db: Session, shop: ShopContext, name: str) -> models.Item | None:
+    """Exact lookup by normalized name — the "does this already exist" check
+    that create/get_or_create rely on. Matches against `upper(canonical_name)`
+    rather than assuming every stored row is already normalized, since rows
+    created before this normalization shipped may still have mixed case."""
+    normalized = normalize_item_name(name)
+    return (
+        db.query(models.Item)
+        .filter(
+            models.Item.shop_id == shop.id,
+            models.Item.is_archived.is_(False),
+            func.upper(models.Item.canonical_name) == normalized,
+        )
+        .first()
+    )
+
+
 def create_item(db: Session, shop: ShopContext, name: str, unit: str = "piece", category: str | None = None) -> models.Item:
-    item = models.Item(shop_id=shop.id, canonical_name=name, unit=unit, category=category)
+    """Always creates a new row — for the explicit "add an item" action. Name
+    is still normalized so it's consistent with everything else in the
+    catalog, but this does not check for an existing duplicate; callers that
+    are inferring an item from a name someone just typed (a purchase/sale
+    line, a bill-scan match) should use get_or_create_item instead."""
+    item = models.Item(shop_id=shop.id, canonical_name=normalize_item_name(name), unit=unit, category=category)
     db.add(item)
     db.flush()
     return item
+
+
+def get_or_create_item(
+    db: Session, shop: ShopContext, name: str, unit: str = "piece", category: str | None = None
+) -> tuple[models.Item, bool]:
+    """The entry point for "new_item_name" on a purchase/sale line — where a
+    typed or scanned name is really the owner referring to an item that may
+    already exist under a slightly different case or spacing. Creating a
+    second row here would silently fork that item's cost history in two, so
+    an existing match is reused rather than duplicated. Returns (item,
+    was_created) so the caller can still report which lines were genuinely new."""
+    existing = find_item_by_name(db, shop, name)
+    if existing:
+        return existing, False
+    return create_item(db, shop, name, unit, category), True
 
 
 def update_item(db: Session, shop: ShopContext, item_id: uuid.UUID, patch: ItemUpdate) -> models.Item | None:
@@ -106,6 +165,12 @@ def update_item(db: Session, shop: ShopContext, item_id: uuid.UUID, patch: ItemU
         return None
     old_selling_price = item.selling_price
     changes = patch.model_dump(exclude_unset=True)
+    if "canonical_name" in changes and changes["canonical_name"] is not None:
+        normalized = normalize_item_name(changes["canonical_name"])
+        collision = find_item_by_name(db, shop, normalized)
+        if collision and collision.item_id != item.item_id:
+            raise DuplicateItemNameError(f'"{normalized}" is already the name of another item.')
+        changes["canonical_name"] = normalized
     for field, value in changes.items():
         setattr(item, field, value)
     if "selling_price" in changes:

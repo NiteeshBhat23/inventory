@@ -3,9 +3,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/apiClient'
 import { invalidate } from '../lib/useQuery'
-import { moneyPrecise, qty } from '../lib/format'
+import { money, moneyPrecise, qty } from '../lib/format'
 import { previewNewAvgCost } from '../lib/costPreview'
-import type { BillExtraction, Item, PurchaseBatchResult } from '../lib/types'
+import type { BillExtraction, Item, MiscCharge, PurchaseBatchResult } from '../lib/types'
 import ItemTypeahead from '../components/ItemTypeahead'
 import SupplierTypeahead from '../components/SupplierTypeahead'
 import BackHeader from '../components/BackHeader'
@@ -26,6 +26,10 @@ interface Line {
   quantity: string
   price: string
   priceMode: 'unit' | 'total'
+  // Display-only explanation of a scanned price, e.g. "+18% GST added" or
+  // "price includes GST" — never sent to the server, purely so the owner can
+  // see that the number in the field isn't the bare rate the bill printed.
+  gstNote: string | null
 }
 
 function newLine(): Line {
@@ -38,6 +42,7 @@ function newLine(): Line {
     quantity: '',
     price: '',
     priceMode: 'unit',
+    gstNote: null,
   }
 }
 
@@ -50,6 +55,35 @@ function unitPriceOf(l: Line): number | null {
     return p / q
   }
   return p
+}
+
+/** Prorates a bill-level charge (packing, freight) across lines by each
+ *  line's share of the bill's total value, then folds that share into the
+ *  line's unit price.
+ *
+ *  Only called when the owner explicitly opts in (see the misc-charge prompt
+ *  below) — silently inflating costs with a charge they never confirmed
+ *  would be worse than leaving it out entirely. Lines with no usable
+ *  quantity/price are left untouched rather than divided evenly, since an
+ *  even split would misattribute cost to items the bill didn't actually
+ *  weight that way. */
+function applyMiscCharges(lines: Line[], totalCharge: number): Line[] {
+  const lineValues = lines.map((l) => {
+    const q = Number(l.quantity) || 0
+    const u = unitPriceOf(l) ?? 0
+    return q * u
+  })
+  const totalValue = lineValues.reduce((sum, v) => sum + v, 0)
+  if (totalValue <= 0) return lines
+
+  return lines.map((l, i) => {
+    const q = Number(l.quantity) || 0
+    const u = unitPriceOf(l)
+    if (q <= 0 || u === null) return l
+    const share = (lineValues[i] / totalValue) * totalCharge
+    const newUnit = u + share / q
+    return { ...l, price: newUnit.toFixed(2), priceMode: 'unit' }
+  })
 }
 
 export default function AddPurchase() {
@@ -67,6 +101,9 @@ export default function AddPurchase() {
   // Records that this batch came from a photo, so the committed rows are
   // tagged source='upload' and scan accuracy can be measured later.
   const [fromScan, setFromScan] = useState(false)
+  // Bill-level charges (packing, freight) the scanner found but hasn't
+  // applied — the owner explicitly opts in via the prompt below.
+  const [miscCharges, setMiscCharges] = useState<MiscCharge[]>([])
 
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
@@ -77,6 +114,14 @@ export default function AddPurchase() {
    *  UI's idea of "confident" matches the one the matcher actually used —
    *  see backend/app/services/matching.py. */
   const STRONG_MATCH = 0.82
+
+  /** Human-readable explanation of a scanned line's price, or null when there
+   *  was no tax signal to report (the price is used exactly as printed). */
+  function gstNoteFor(gstPct: number | null, includesGst: boolean | null): string | null {
+    if (includesGst) return 'Price includes GST'
+    if (gstPct !== null) return `+${gstPct}% GST added`
+    return null
+  }
 
   /** Turns an extracted bill into editable form rows.
    *
@@ -108,9 +153,12 @@ export default function AddPurchase() {
           // than becoming 0, forcing the owner to supply it instead of
           // silently saving a wrong number.
           quantity: l.quantity !== null ? String(l.quantity) : '',
+          // unit_price/total_price are already GST-adjusted server-side —
+          // this is the shop's real per-unit cost, not the bare printed rate.
           price:
             l.unit_price !== null ? String(l.unit_price) : l.total_price !== null ? String(l.total_price) : '',
           priceMode: l.unit_price !== null || l.total_price === null ? 'unit' : 'total',
+          gstNote: gstNoteFor(l.gst_pct, l.price_includes_gst),
         }
       }),
     )
@@ -118,6 +166,7 @@ export default function AddPurchase() {
     setLines(resolved.length > 0 ? resolved : [newLine()])
     setScanNotes(bill.warnings)
     setFromScan(true)
+    setMiscCharges(bill.misc_charges)
     setError(null)
     if (resolved.length > 0) {
       toast.success(`Read ${resolved.length} item(s) — check them before saving`)
@@ -240,6 +289,7 @@ export default function AddPurchase() {
               setSupplier('')
               setScanNotes([])
               setFromScan(false)
+              setMiscCharges([])
             }}
           >
             Add another
@@ -270,6 +320,44 @@ export default function AddPurchase() {
               <li key={i}>{note}</li>
             ))}
           </ul>
+        </AlertBanner>
+      )}
+
+      {/* Never applied automatically — packing/freight charges only fold into
+          item costs if the owner explicitly says so here. */}
+      {miscCharges.length > 0 && (
+        <AlertBanner tone="warn">
+          <div className="space-y-2">
+            <div>
+              <p className="font-medium">
+                This bill also has {money(miscCharges.reduce((sum, c) => sum + c.amount, 0))} in extra
+                charges:
+              </p>
+              <ul className="mt-0.5 space-y-0.5 opacity-90">
+                {miscCharges.map((c, i) => (
+                  <li key={i}>
+                    {c.label} — {money(c.amount)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const total = miscCharges.reduce((sum, c) => sum + c.amount, 0)
+                  setLines((prev) => applyMiscCharges(prev, total))
+                  setMiscCharges([])
+                  toast.success('Added to item costs')
+                }}
+              >
+                Add to item costs
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setMiscCharges([])}>
+                Ignore
+              </Button>
+            </div>
+          </div>
         </AlertBanner>
       )}
 
@@ -377,6 +465,12 @@ export default function AddPurchase() {
                     onChange={(e) => updateLine(l.key, { price: e.target.value })}
                   />
                 </div>
+
+                {/* Transparency for a scanned price: the number in the field
+                    above may already be higher than the bill's printed rate
+                    because GST was added — this says so rather than leaving
+                    the owner to wonder where the number came from. */}
+                {l.gstNote && <p className="text-xs text-ink-muted">{l.gstNote}</p>}
 
                 <button
                   type="button"

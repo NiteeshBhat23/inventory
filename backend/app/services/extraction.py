@@ -79,6 +79,7 @@ Extract:
 - supplier_name: the business the shop bought FROM (the vendor issuing the bill)
 - bill_date: the date on the bill
 - line_items: every product row on the bill
+- misc_charges: bill-level extra charges — see the GST and misc_charges rules below
 
 For each line item extract item_name, quantity, unit (piece/litre/set/box etc.),
 unit_price (price for ONE unit) and total_price (price for the whole row).
@@ -93,10 +94,39 @@ Extract:
 - invoice_ref: the invoice number/reference, if printed
 - bill_date: the date on the invoice
 - line_items: every product row on the invoice
+- misc_charges: bill-level extra charges — see the GST and misc_charges rules below
 
 For each line item extract item_name, quantity, unit_price (price charged for
 ONE unit) and total_price (price for the whole row). Ignore labour/service
 charge rows that are not physical products.
+"""
+
+_GST_AND_MISC_RULES = """\
+GST rules — Indian bills handle tax inconsistently, so read carefully per line:
+6. For each line item also extract gst_pct (the GST/tax rate shown for that
+   row, e.g. 18 for "18%" or "GST 18%") and price_includes_gst (true/false/null):
+   - If the bill has a separate GST%/tax column or note next to a line, and the
+     rate/amount is clearly the PRE-tax price, set price_includes_gst: false and
+     fill gst_pct with that row's rate.
+   - If the bill states prices are "inclusive of GST/tax", or a line clearly
+     already has tax folded into its rate with no separate tax column, set
+     price_includes_gst: true.
+   - Different rows on the same bill can have different GST rates — read each
+     row's own rate, do not assume one rate for the whole bill.
+   - If you cannot tell whether tax is included, set both gst_pct and
+     price_includes_gst to null rather than guessing — an unknown tax status
+     must never be assumed to be zero.
+   - Do NOT include the bill's tax summary rows (e.g. "Output CGST",
+     "Output SGST", "Output IGST", "Total Tax") as line items — those are
+     totals, not products.
+
+misc_charges rules:
+7. Extract bill-level charges that are NOT tied to a specific product row —
+   e.g. "Packing & Forwarding", "Freight", "Transportation", "Loading Charges".
+   Each becomes one entry: {"label": "...", "amount": <the charge, as printed>}.
+   - Do NOT include "Round Off" (negligible) or the GST/tax summary rows —
+     those are not owner decisions and must not appear in misc_charges.
+   - If there are no such charges, return an empty list.
 """
 
 _SHARED_RULES = """\
@@ -110,7 +140,7 @@ Rules, in order of importance:
 4. bill_date must be formatted strictly as YYYY-MM-DD. Indian bills are
    usually DD/MM/YYYY — read them as day-first, not month-first.
 5. Include every product row you can see, even if some of its fields are null.
-"""
+""" + _GST_AND_MISC_RULES
 
 
 def _prompt_for(bill_type: str) -> str:
@@ -250,6 +280,55 @@ def _clean_str(value: Any) -> str | None:
     return text
 
 
+def _coerce_bool(value: Any) -> bool | None:
+    """Reads price_includes_gst leniently — the model sometimes answers
+    "true"/"yes"/"inclusive" as a string instead of a JSON boolean."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "inclusive", "incl"}:
+            return True
+        if lowered in {"false", "no", "exclusive", "excl"}:
+            return False
+    return None
+
+
+def _apply_gst(
+    unit_price: float | None,
+    total_price: float | None,
+    quantity: float | None,
+    gst_pct: float | None,
+    price_includes_gst: bool | None,
+) -> tuple[float | None, float | None]:
+    """Turns the bill's printed rate into the shop's actual landed cost.
+
+    A supplier bill's Rate/Amount columns are routinely pre-tax, with GST%
+    printed separately — the owner's true per-unit cost is rate * (1 +
+    gst_pct/100), not the printed rate. This is the one calculation this
+    whole feature exists to save the owner from doing by hand on every bill.
+
+    Deliberately conservative: with no tax information at all (gst_pct is
+    None), the price is returned completely unchanged — silently adding tax
+    that was never confirmed would be worse than the manual-entry status quo
+    it's replacing."""
+    if price_includes_gst or not gst_pct:
+        return unit_price, total_price
+
+    multiplier = 1 + (gst_pct / 100)
+    new_unit = round(unit_price * multiplier, 2) if unit_price is not None else None
+    if new_unit is not None and quantity:
+        # Recompute the row total from the adjusted unit price rather than
+        # scaling the printed total directly, so unit_price * quantity always
+        # equals total_price for the owner to sanity-check by eye.
+        new_total = round(new_unit * quantity, 2)
+    elif total_price is not None:
+        new_total = round(total_price * multiplier, 2)
+    else:
+        new_total = None
+    return new_unit, new_total
+
+
 def _normalise_payload(raw: Any) -> dict[str, Any]:
     """Maps whatever shape came back onto the ExtractedBill fields.
 
@@ -274,21 +353,41 @@ def _normalise_payload(raw: Any) -> dict[str, Any]:
         quantity = _coerce_number(row.get("quantity") or row.get("qty"))
         unit_price = _coerce_number(row.get("unit_price") or row.get("rate") or row.get("price"))
         total_price = _coerce_number(row.get("total_price") or row.get("amount") or row.get("total"))
+        gst_pct = _coerce_number(row.get("gst_pct") or row.get("gst_rate") or row.get("tax_pct"))
+        price_includes_gst = _coerce_bool(row.get("price_includes_gst"))
 
         # A row with no name and no numbers at all is noise (a table header, a
         # stray footer line) rather than a product — drop it silently.
         if name is None and quantity is None and unit_price is None and total_price is None:
             continue
 
+        adjusted_unit, adjusted_total = _apply_gst(unit_price, total_price, quantity, gst_pct, price_includes_gst)
+
         lines.append(
             {
                 "item_name": name,
                 "quantity": quantity,
                 "unit": _clean_str(row.get("unit")),
-                "unit_price": unit_price,
-                "total_price": total_price,
+                "unit_price": adjusted_unit,
+                "total_price": adjusted_total,
+                "gst_pct": gst_pct,
+                "price_includes_gst": price_includes_gst,
             }
         )
+
+    misc_raw = raw.get("misc_charges") or raw.get("other_charges") or []
+    misc_charges: list[dict[str, Any]] = []
+    if isinstance(misc_raw, list):
+        for entry in misc_raw:
+            if not isinstance(entry, dict):
+                continue
+            label = _clean_str(entry.get("label") or entry.get("name") or entry.get("description"))
+            amount = _coerce_number(entry.get("amount") or entry.get("value"))
+            # An unnamed or unpriced charge can't be shown to the owner as a
+            # meaningful choice, so it's dropped rather than passed through.
+            if label is None or amount is None:
+                continue
+            misc_charges.append({"label": label, "amount": amount})
 
     return {
         "supplier_name": _clean_str(raw.get("supplier_name") or raw.get("vendor_name")),
@@ -296,6 +395,7 @@ def _normalise_payload(raw: Any) -> dict[str, Any]:
         "invoice_ref": _clean_str(raw.get("invoice_ref") or raw.get("invoice_no") or raw.get("invoice_number")),
         "bill_date": _coerce_date(raw.get("bill_date") or raw.get("invoice_date") or raw.get("date")),
         "line_items": lines,
+        "misc_charges": misc_charges,
     }
 
 

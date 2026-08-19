@@ -44,6 +44,7 @@ class ItemUpdate(BaseModel):
     target_margin_pct: Decimal | None = None
     low_stock_threshold: Decimal | None = None
     is_archived: bool | None = None
+    wont_restock: bool | None = None
 
 
 class ItemOut(BaseModel):
@@ -59,6 +60,7 @@ class ItemOut(BaseModel):
     category: str | None
     low_stock_threshold: float | None
     is_archived: bool
+    wont_restock: bool = False
     suggested_selling_price: float | None = None
     margin_pct: float | None = None
     is_below_cost: bool = False
@@ -214,13 +216,41 @@ class SaleHistoryEntry(BaseModel):
 
 
 class ExtractedLine(BaseModel):
-    """One line item as read off the bill, before any matching."""
+    """One line item as read off the bill, before any matching.
+
+    unit_price/total_price are whatever the bill's Rate/Amount columns show —
+    they are NOT necessarily the shop's true landed cost, because Indian
+    supplier bills routinely print a pre-tax rate with GST% as a separate
+    column (see gst_pct/price_includes_gst below). extraction.py resolves
+    that into a tax-inclusive cost before this ever reaches the frontend."""
 
     item_name: str | None = None
     quantity: float | None = None
     unit: str | None = None
     unit_price: float | None = None
     total_price: float | None = None
+    # GST rate printed against this line (e.g. 18 for "18%"), if any. Bills
+    # commonly vary this per row — a spark plug at 5% and a filter at 18% on
+    # the same invoice — so this is read per line, not once for the bill.
+    gst_pct: float | None = None
+    # True: the rate/amount above already has GST baked in (bill says
+    # "inclusive of tax", or shows no separate tax column at all and the
+    # model judges the price already final). False: GST is added on top —
+    # the common case with a printed GST% column. Null: couldn't tell, so no
+    # tax adjustment is applied and the price is used exactly as printed.
+    price_includes_gst: bool | None = None
+
+
+class MiscCharge(BaseModel):
+    """A bill-level extra charge that isn't tied to one product row —
+    packing & forwarding, freight, loading. Deliberately excludes tax
+    summary rows (Output CGST/SGST) and rounding, which are not owner
+    decisions to make. Kept separate from line items because whether to
+    fold this into item costs is the owner's call, not an automatic one —
+    see BillExtractionOut.misc_charges."""
+
+    label: str
+    amount: float
 
 
 class ExtractedBill(BaseModel):
@@ -233,10 +263,18 @@ class ExtractedBill(BaseModel):
     invoice_ref: str | None = None
     bill_date: date | None = None
     line_items: list[ExtractedLine] = []
+    misc_charges: list[MiscCharge] = []
 
 
 class MatchedLine(BaseModel):
     """An extracted line with the shop's catalog consulted.
+
+    unit_price/total_price here are already GST-adjusted by extraction.py —
+    this is the number the purchase/sale form should use as the real per-unit
+    cost, not a value the frontend needs to gross up itself. gst_pct/
+    price_includes_gst are carried through purely so the UI can show the
+    owner what was applied ("+18% GST added") rather than silently changing
+    the number the bill printed.
 
     match_confidence is the fuzzy-similarity score (0-1) behind the suggested
     item. The UI shows a low-confidence match as a suggestion the owner must
@@ -248,6 +286,8 @@ class MatchedLine(BaseModel):
     unit: str | None = None
     unit_price: float | None = None
     total_price: float | None = None
+    gst_pct: float | None = None
+    price_includes_gst: bool | None = None
     matched_item_id: uuid.UUID | None = None
     matched_item_name: str | None = None
     match_confidence: float | None = None
@@ -258,7 +298,11 @@ class BillExtractionOut(BaseModel):
 
     `warnings` carries non-fatal problems the owner should see (a line with no
     readable price, a date we couldn't parse). A partially-read bill is still
-    useful — it beats typing the whole thing — so these never fail the request."""
+    useful — it beats typing the whole thing — so these never fail the request.
+
+    `misc_charges` is returned but never auto-applied: the frontend shows it
+    as a prompt ("this bill also has ₹99 in Packing & Forwarding — add it to
+    item costs?") and only prorates it across lines if the owner says yes."""
 
     bill_type: str  # 'purchase' | 'sale'
     supplier_name: str | None = None
@@ -266,6 +310,7 @@ class BillExtractionOut(BaseModel):
     invoice_ref: str | None = None
     bill_date: date | None = None
     lines: list[MatchedLine] = []
+    misc_charges: list[MiscCharge] = []
     warnings: list[str] = []
 
 

@@ -47,7 +47,8 @@ WITH live_items AS (
            target_margin_pct::text AS target_margin_pct,
            category,
            low_stock_threshold::text AS low_stock_threshold,
-           is_archived
+           is_archived,
+           wont_restock
     FROM items
     WHERE shop_id = :shop_id AND is_archived = false
 ),
@@ -137,6 +138,7 @@ def _item_from_row(row: dict) -> SimpleNamespace:
             Decimal(row["low_stock_threshold"]) if row["low_stock_threshold"] is not None else None
         ),
         is_archived=row["is_archived"],
+        wont_restock=row["wont_restock"],
     )
 
 

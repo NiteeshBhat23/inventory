@@ -17,6 +17,7 @@ export interface Item {
   category: string | null
   low_stock_threshold: number | null
   is_archived: boolean
+  wont_restock: boolean
   suggested_selling_price: number | null
   margin_pct: number | null
   is_below_cost: boolean
@@ -112,11 +113,24 @@ export interface MatchedLine {
   item_name: string | null
   quantity: number | null
   unit: string | null
+  // Already GST-adjusted by the backend — this is the shop's real per-unit
+  // landed cost, not necessarily the rate the bill printed.
   unit_price: number | null
   total_price: number | null
+  // Carried through purely so the UI can show what was applied (e.g. "+18%
+  // GST added"); the adjustment itself already happened server-side.
+  gst_pct: number | null
+  price_includes_gst: boolean | null
   matched_item_id: string | null
   matched_item_name: string | null
   match_confidence: number | null
+}
+
+/** A bill-level charge not tied to one product row (packing, freight). Never
+ *  auto-applied — see the misc-charge prompt in AddPurchase/RecordSale. */
+export interface MiscCharge {
+  label: string
+  amount: number
 }
 
 export interface BillExtraction {
@@ -126,6 +140,7 @@ export interface BillExtraction {
   invoice_ref: string | null
   bill_date: string | null
   lines: MatchedLine[]
+  misc_charges: MiscCharge[]
   warnings: string[]
 }
 

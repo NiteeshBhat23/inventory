@@ -8,6 +8,7 @@ from ..db import get_db
 from ..deps import ShopContext, get_current_shop
 from ..schemas import ItemCreate, ItemMergeRequest, ItemOut, ItemUpdate, PurchaseHistoryOut
 from ..services import items as items_service
+from ..services.items import DuplicateItemNameError
 from ..services.analytics import invalidate_dashboard_cache
 from ..services.insights import invalidate_insights_cache
 
@@ -55,7 +56,10 @@ def update_item(
     shop: ShopContext = Depends(get_current_shop),
     db: Session = Depends(get_db),
 ):
-    item = items_service.update_item(db, shop, item_id, body)
+    try:
+        item = items_service.update_item(db, shop, item_id, body)
+    except DuplicateItemNameError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     db.commit()

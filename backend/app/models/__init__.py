@@ -49,6 +49,10 @@ class Item(Base):
     category: Mapped[str | None] = mapped_column(String, nullable=True)
     low_stock_threshold: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Owner opted out of the low-stock alert for this item (e.g. sold out and
+    # not reordering) — never affects cost/stock/profit, only whether it
+    # shows up as low stock. Cleared automatically on the next purchase.
+    wont_restock: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

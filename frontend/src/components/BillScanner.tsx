@@ -1,4 +1,4 @@
-import { Camera, Spinner } from '@phosphor-icons/react'
+import { Camera, Image as ImageIcon, Spinner } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
 import { api, ApiError } from '../lib/apiClient'
 import { compressBillImage } from '../lib/imageCompress'
@@ -21,9 +21,18 @@ interface Props {
  *  merely approximate, and in every one of those cases the owner must still
  *  be able to type the bill in. So a failure here only ever shows a message —
  *  it never blocks or clears the form underneath.
+ *
+ *  Two separate file inputs, not one: an `<input capture>` forces a mobile
+ *  browser straight into the camera and hides the gallery/"choose existing
+ *  file" option entirely — there's no attribute that reliably offers both in
+ *  one control across browsers. Many bills are already a photo sitting in the
+ *  owner's gallery (forwarded on WhatsApp, taken earlier), so that path has
+ *  to be a first-class option, not just camera-first. Desktop ignores
+ *  `capture` and shows its normal file picker for both buttons either way.
  */
 export default function BillScanner({ billType, onExtracted }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,43 +69,64 @@ export default function BillScanner({ billType, onExtracted }: Props) {
     }
   }
 
-  const label = billType === 'purchase' ? 'Scan supplier bill' : 'Scan sales invoice'
+  const noun = billType === 'purchase' ? 'bill' : 'invoice'
 
   return (
     <div className="space-y-2.5">
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
-        // `capture` asks a phone to open the camera directly rather than the
-        // gallery, which is what the owner wants standing at the counter with
-        // a paper bill in hand. Desktop browsers ignore it and show a picker.
-        accept="image/*,application/pdf"
+        accept="image/*"
         capture="environment"
         onChange={handleFile}
         className="sr-only"
         aria-hidden="true"
         tabIndex={-1}
       />
-      <Button
-        type="button"
-        variant="secondary"
-        fullWidth
-        loading={busy}
-        icon={
-          busy ? (
-            <Spinner size={18} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Camera size={18} weight="duotone" aria-hidden="true" />
-          )
-        }
-        onClick={() => inputRef.current?.click()}
-      >
-        {busy ? 'Reading bill…' : label}
-      </Button>
+      <input
+        ref={galleryInputRef}
+        type="file"
+        // No `capture` here — this is the picker for a photo (or PDF) that
+        // already exists, as opposed to the camera input above.
+        accept="image/*,application/pdf"
+        onChange={handleFile}
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <div className="flex gap-2.5">
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          loading={busy}
+          icon={
+            busy ? (
+              <Spinner size={18} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Camera size={18} weight="duotone" aria-hidden="true" />
+            )
+          }
+          onClick={() => cameraInputRef.current?.click()}
+        >
+          {busy ? 'Reading…' : 'Take photo'}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          disabled={busy}
+          icon={<ImageIcon size={18} weight="duotone" aria-hidden="true" />}
+          onClick={() => galleryInputRef.current?.click()}
+        >
+          Choose file
+        </Button>
+      </div>
 
       {busy && (
         <p className="text-center text-xs text-ink-muted">
-          Reading the photo — this usually takes a few seconds.
+          Reading the {noun} — this usually takes a few seconds.
         </p>
       )}
 

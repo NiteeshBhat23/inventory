@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/apiClient'
 import { invalidate } from '../lib/useQuery'
 import { money, moneyPrecise, percent, qty } from '../lib/format'
-import type { BillExtraction, Item, SaleBatchResult, SaleLineResult } from '../lib/types'
+import type { BillExtraction, Item, MiscCharge, SaleBatchResult, SaleLineResult } from '../lib/types'
 import ItemTypeahead from '../components/ItemTypeahead'
 import BackHeader from '../components/BackHeader'
 import BillScanner from '../components/BillScanner'
@@ -22,10 +22,44 @@ interface Line {
   quantity: string
   salePrice: string
   override: boolean
+  // Display-only explanation of a scanned price — see AddPurchase's Line for
+  // why this is never sent to the server.
+  gstNote: string | null
 }
 
 function newLine(): Line {
-  return { key: crypto.randomUUID(), query: '', selected: null, quantity: '', salePrice: '', override: false }
+  return {
+    key: crypto.randomUUID(),
+    query: '',
+    selected: null,
+    quantity: '',
+    salePrice: '',
+    override: false,
+    gstNote: null,
+  }
+}
+
+function gstNoteFor(gstPct: number | null, includesGst: boolean | null): string | null {
+  if (includesGst) return 'Price includes GST'
+  if (gstPct !== null) return `+${gstPct}% GST added`
+  return null
+}
+
+/** Prorates a bill-level charge across lines by each line's share of total
+ *  value — see AddPurchase's applyMiscCharges for the full rationale. Only
+ *  called when the owner opts in via the prompt. */
+function applyMiscCharges(lines: Line[], totalCharge: number): Line[] {
+  const lineValues = lines.map((l) => (Number(l.quantity) || 0) * (Number(l.salePrice) || 0))
+  const totalValue = lineValues.reduce((sum, v) => sum + v, 0)
+  if (totalValue <= 0) return lines
+
+  return lines.map((l, i) => {
+    const q = Number(l.quantity) || 0
+    const p = Number(l.salePrice) || 0
+    if (q <= 0 || p <= 0) return l
+    const share = (lineValues[i] / totalValue) * totalCharge
+    return { ...l, salePrice: (p + share / q).toFixed(2) }
+  })
 }
 
 export default function RecordSale() {
@@ -40,6 +74,7 @@ export default function RecordSale() {
   const [fromScan, setFromScan] = useState(false)
   const [customerName, setCustomerName] = useState<string | null>(null)
   const [invoiceRef, setInvoiceRef] = useState<string | null>(null)
+  const [miscCharges, setMiscCharges] = useState<MiscCharge[]>([])
 
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
@@ -76,6 +111,7 @@ export default function RecordSale() {
           // differ, and the invoice is the source of truth for what happened.
           salePrice: price !== null ? String(price) : selected ? String(selected.selling_price || '') : '',
           override: false,
+          gstNote: gstNoteFor(l.gst_pct, l.price_includes_gst),
         }
       }),
     )
@@ -83,6 +119,7 @@ export default function RecordSale() {
     setLines(resolved.length > 0 ? resolved : [newLine()])
     setScanNotes(bill.warnings)
     setFromScan(true)
+    setMiscCharges(bill.misc_charges)
     setError(null)
     if (resolved.length > 0) {
       toast.success(`Read ${resolved.length} item(s) — check them before saving`)
@@ -207,6 +244,7 @@ export default function RecordSale() {
               setFromScan(false)
               setCustomerName(null)
               setInvoiceRef(null)
+              setMiscCharges([])
             }}
           >
             Record another
@@ -237,6 +275,43 @@ export default function RecordSale() {
               <li key={i}>{note}</li>
             ))}
           </ul>
+        </AlertBanner>
+      )}
+
+      {/* Never applied automatically — see AddPurchase's identical prompt. */}
+      {miscCharges.length > 0 && (
+        <AlertBanner tone="warn">
+          <div className="space-y-2">
+            <div>
+              <p className="font-medium">
+                This invoice also has {money(miscCharges.reduce((sum, c) => sum + c.amount, 0))} in extra
+                charges:
+              </p>
+              <ul className="mt-0.5 space-y-0.5 opacity-90">
+                {miscCharges.map((c, i) => (
+                  <li key={i}>
+                    {c.label} — {money(c.amount)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const total = miscCharges.reduce((sum, c) => sum + c.amount, 0)
+                  setLines((prev) => applyMiscCharges(prev, total))
+                  setMiscCharges([])
+                  toast.success('Added to item prices')
+                }}
+              >
+                Add to item prices
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setMiscCharges([])}>
+                Ignore
+              </Button>
+            </div>
+          </div>
         </AlertBanner>
       )}
 
@@ -330,6 +405,8 @@ export default function RecordSale() {
                     onChange={(e) => updateLine(l.key, { salePrice: e.target.value })}
                   />
                 </div>
+
+                {l.gstNote && <p className="text-xs text-ink-muted">{l.gstNote}</p>}
 
                 {/* Live margin maths: the owner is choosing a price right now, so
                     the consequence of that choice should be visible before they

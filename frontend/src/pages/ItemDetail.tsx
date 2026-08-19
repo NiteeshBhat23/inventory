@@ -267,11 +267,45 @@ export default function ItemDetail() {
           per {item.unit}.
         </AlertBanner>
       )}
-      {item.is_low_stock && (
+      {item.wont_restock ? (
+        // Distinct from is_low_stock being merely false: this says the
+        // owner actively dismissed the alert, and offers the way back —
+        // otherwise there'd be no visible trace this item was ever flagged.
         <AlertBanner tone="warn">
-          Only {qty(item.stock_qty)} {item.unit} left — at or below your alert level of{' '}
-          {qty(threshold)}.
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>Marked as not restocking — hidden from low-stock alerts.</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={saving}
+              onClick={() => patch({ wont_restock: false }, 'Low-stock alerts resumed')}
+            >
+              Resume alerts
+            </Button>
+          </div>
         </AlertBanner>
+      ) : (
+        item.is_low_stock && (
+          <AlertBanner tone="warn">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Only {qty(item.stock_qty)} {item.unit} left — at or below your alert level of{' '}
+                {qty(threshold)}.
+              </span>
+              {/* For the "sold out and not reordering" case — hides this item
+                  from low-stock alerts without touching its cost/stock/sales
+                  history. A later purchase clears this automatically. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={saving}
+                onClick={() => patch({ wont_restock: true }, "Won't show as low stock")}
+              >
+                Not restocking this item
+              </Button>
+            </div>
+          </AlertBanner>
+        )
       )}
 
       <Card>

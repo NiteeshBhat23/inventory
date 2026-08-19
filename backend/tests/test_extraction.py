@@ -96,6 +96,98 @@ def test_unparseable_output_degrades_to_empty_bill(garbage):
     assert bill.supplier_name is None
 
 
+# ---------- GST handling ----------
+# Modeled directly on a real supplier bill: per-line GST% shown separately
+# from a pre-tax rate ("GX80 CARBURETOR ... 750.00" with "18 %" GST alongside),
+# plus bill-level Packing & Forwarding — see AddPurchase's misc-charge prompt.
+
+
+def test_gst_added_to_pretax_price():
+    bill = parse_model_output(
+        '{"line_items": [{"item_name": "GX80 Carburetor", "quantity": 2,'
+        ' "unit_price": 750, "total_price": 1500, "gst_pct": 18,'
+        ' "price_includes_gst": false}]}'
+    )
+    line = bill.line_items[0]
+    # 750 * 1.18 = 885 — the owner's real landed cost, not the printed rate.
+    assert line.unit_price == 885.0
+    assert line.total_price == 1770.0
+    assert line.gst_pct == 18
+    assert line.price_includes_gst is False
+
+
+def test_price_already_including_gst_is_left_alone():
+    bill = parse_model_output(
+        '{"line_items": [{"item_name": "Brake Pad", "quantity": 1,'
+        ' "unit_price": 500, "total_price": 500, "gst_pct": 18,'
+        ' "price_includes_gst": true}]}'
+    )
+    line = bill.line_items[0]
+    assert line.unit_price == 500.0
+    assert line.total_price == 500.0
+
+
+def test_no_gst_information_is_never_grossed_up():
+    """The conservative default: with no tax signal at all, the price must
+    come through completely unchanged — silently adding tax that was never
+    confirmed would corrupt the owner's cost worse than not scanning at all."""
+    bill = parse_model_output('{"line_items": [{"item_name": "Wiper Blade", "unit_price": 450}]}')
+    line = bill.line_items[0]
+    assert line.unit_price == 450.0
+    assert line.gst_pct is None
+    assert line.price_includes_gst is None
+
+
+def test_different_gst_rates_per_line_on_same_bill():
+    # A real bill mixes rates — e.g. spark plugs at 18%, filters at 5%.
+    bill = parse_model_output(
+        '{"line_items": ['
+        '{"item_name": "Spark Plug", "unit_price": 50, "gst_pct": 18, "price_includes_gst": false},'
+        '{"item_name": "Air Filter", "unit_price": 750, "gst_pct": 5, "price_includes_gst": false}'
+        "]}"
+    )
+    spark, air = bill.line_items
+    assert spark.unit_price == 59.0
+    assert air.unit_price == 787.5
+
+
+def test_string_price_includes_gst_is_coerced():
+    bill = parse_model_output(
+        '{"line_items": [{"item_name": "Oil Filter", "unit_price": 500,'
+        ' "gst_pct": 18, "price_includes_gst": "true"}]}'
+    )
+    assert bill.line_items[0].unit_price == 500.0  # unchanged — already inclusive
+
+
+# ---------- misc_charges ----------
+
+
+def test_misc_charges_parsed():
+    bill = parse_model_output(
+        '{"line_items": [{"item_name": "Oil Filter", "unit_price": 500}],'
+        ' "misc_charges": [{"label": "Packing & Forwarding", "amount": 99.0},'
+        ' {"label": "Freight", "amount": 150}]}'
+    )
+    assert len(bill.misc_charges) == 2
+    assert bill.misc_charges[0].label == "Packing & Forwarding"
+    assert bill.misc_charges[0].amount == 99.0
+    assert bill.misc_charges[1].amount == 150.0
+
+
+def test_misc_charges_default_empty():
+    bill = parse_model_output('{"line_items": [{"item_name": "Oil Filter"}]}')
+    assert bill.misc_charges == []
+
+
+def test_misc_charge_missing_label_or_amount_is_dropped():
+    bill = parse_model_output(
+        '{"misc_charges": [{"label": "Round Off"}, {"amount": 99.0}, '
+        '{"label": "Freight", "amount": 150.0}]}'
+    )
+    assert len(bill.misc_charges) == 1
+    assert bill.misc_charges[0].label == "Freight"
+
+
 def test_alternate_field_names():
     bill = parse_model_output(
         '{"vendor_name": "ACME", "invoice_date": "2026-01-05",'
