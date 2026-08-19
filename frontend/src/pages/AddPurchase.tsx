@@ -323,44 +323,6 @@ export default function AddPurchase() {
         </AlertBanner>
       )}
 
-      {/* Never applied automatically — packing/freight charges only fold into
-          item costs if the owner explicitly says so here. */}
-      {miscCharges.length > 0 && (
-        <AlertBanner tone="warn">
-          <div className="space-y-2">
-            <div>
-              <p className="font-medium">
-                This bill also has {money(miscCharges.reduce((sum, c) => sum + c.amount, 0))} in extra
-                charges:
-              </p>
-              <ul className="mt-0.5 space-y-0.5 opacity-90">
-                {miscCharges.map((c, i) => (
-                  <li key={i}>
-                    {c.label} — {money(c.amount)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  const total = miscCharges.reduce((sum, c) => sum + c.amount, 0)
-                  setLines((prev) => applyMiscCharges(prev, total))
-                  setMiscCharges([])
-                  toast.success('Added to item costs')
-                }}
-              >
-                Add to item costs
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setMiscCharges([])}>
-                Ignore
-              </Button>
-            </div>
-          </div>
-        </AlertBanner>
-      )}
-
       <Card>
         <div className="grid gap-3 sm:grid-cols-2">
           <SupplierTypeahead
@@ -516,6 +478,45 @@ export default function AddPurchase() {
       >
         Add another item
       </Button>
+
+      {/* Shown after the item list, once the owner has seen every line — never
+          applied automatically. Packing/freight charges only fold into item
+          costs if the owner explicitly says so here. */}
+      {miscCharges.length > 0 && (
+        <AlertBanner tone="warn">
+          <div className="space-y-2">
+            <div>
+              <p className="font-medium">
+                This bill also has {money(miscCharges.reduce((sum, c) => sum + c.amount, 0))} in extra
+                charges:
+              </p>
+              <ul className="mt-0.5 space-y-0.5 opacity-90">
+                {miscCharges.map((c, i) => (
+                  <li key={i}>
+                    {c.label} — {money(c.amount)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const total = miscCharges.reduce((sum, c) => sum + c.amount, 0)
+                  setLines((prev) => applyMiscCharges(prev, total))
+                  setMiscCharges([])
+                  toast.success('Added to item costs')
+                }}
+              >
+                Add to item costs
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setMiscCharges([])}>
+                Ignore
+              </Button>
+            </div>
+          </div>
+        </AlertBanner>
+      )}
 
       {error && <AlertBanner tone="bad">{error}</AlertBanner>}
 

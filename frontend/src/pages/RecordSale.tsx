@@ -278,43 +278,6 @@ export default function RecordSale() {
         </AlertBanner>
       )}
 
-      {/* Never applied automatically — see AddPurchase's identical prompt. */}
-      {miscCharges.length > 0 && (
-        <AlertBanner tone="warn">
-          <div className="space-y-2">
-            <div>
-              <p className="font-medium">
-                This invoice also has {money(miscCharges.reduce((sum, c) => sum + c.amount, 0))} in extra
-                charges:
-              </p>
-              <ul className="mt-0.5 space-y-0.5 opacity-90">
-                {miscCharges.map((c, i) => (
-                  <li key={i}>
-                    {c.label} — {money(c.amount)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  const total = miscCharges.reduce((sum, c) => sum + c.amount, 0)
-                  setLines((prev) => applyMiscCharges(prev, total))
-                  setMiscCharges([])
-                  toast.success('Added to item prices')
-                }}
-              >
-                Add to item prices
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setMiscCharges([])}>
-                Ignore
-              </Button>
-            </div>
-          </div>
-        </AlertBanner>
-      )}
-
       <div className="space-y-3">
         {lines.map((l, idx) => {
           const blockedLine = blocked.find((b) => b.item_id === l.selected?.item_id)
@@ -477,6 +440,44 @@ export default function RecordSale() {
       >
         Add another item
       </Button>
+
+      {/* Shown after the item list, once the owner has seen every line — never
+          applied automatically. See AddPurchase's identical prompt. */}
+      {miscCharges.length > 0 && (
+        <AlertBanner tone="warn">
+          <div className="space-y-2">
+            <div>
+              <p className="font-medium">
+                This invoice also has {money(miscCharges.reduce((sum, c) => sum + c.amount, 0))} in extra
+                charges:
+              </p>
+              <ul className="mt-0.5 space-y-0.5 opacity-90">
+                {miscCharges.map((c, i) => (
+                  <li key={i}>
+                    {c.label} — {money(c.amount)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const total = miscCharges.reduce((sum, c) => sum + c.amount, 0)
+                  setLines((prev) => applyMiscCharges(prev, total))
+                  setMiscCharges([])
+                  toast.success('Added to item prices')
+                }}
+              >
+                Add to item prices
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setMiscCharges([])}>
+                Ignore
+              </Button>
+            </div>
+          </div>
+        </AlertBanner>
+      )}
 
       {totals.revenue > 0 && (
         <Card>
